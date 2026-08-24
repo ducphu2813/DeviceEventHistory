@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk.Worker">
+
+    <PropertyGroup>
+        <TargetFramework>net10.0</TargetFramework>
+        <Nullable>enable</Nullable>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <UserSecretsId>dotnet-DeviceEventHistory.Worker-3fcdffc7-a027-4992-8ebc-569a572a269f</UserSecretsId>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <PackageReference Include="Microsoft.Extensions.Hosting" Version="10.0.9"/>
+    </ItemGroup>
+
+    <ItemGroup>
+      <ProjectReference Include="..\DeviceEventHistory.Application\DeviceEventHistory.Application.csproj" />
+      <ProjectReference Include="..\DeviceEventHistory.Infrastructure\DeviceEventHistory.Infrastructure.csproj" />
+    </ItemGroup>
+</Project>

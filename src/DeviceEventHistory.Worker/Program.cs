@@ -1,0 +1,32 @@
+using DeviceEventHistory.Worker;
+
+using DeviceEventHistory.Infrastructure.MongoDb.Configuration;
+using DeviceEventHistory.Infrastructure.RfidRawLog.Configuration;
+using DeviceEventHistory.Worker.Configuration;
+
+var builder = Host.CreateApplicationBuilder(args);
+builder.Services.AddDeviceEventHistoryConfiguration(builder.Configuration);
+builder.Services.AddHostedService<Worker>();
+
+var host = builder.Build();
+
+var logger = host.Services.GetRequiredService<ILoggerFactory>().CreateLogger("Startup");
+var redactor = host.Services.GetRequiredService<ConfigurationRedactor>();
+var summary = redactor.CreateSummary(
+    host.Services.GetRequiredService<Microsoft.Extensions.Options.IOptions<WorkerOptions>>().Value,
+    host.Services.GetRequiredService<Microsoft.Extensions.Options.IOptions<RfidRawLogOptions>>().Value,
+    host.Services.GetRequiredService<Microsoft.Extensions.Options.IOptions<MongoDbOptions>>().Value);
+
+logger.LogInformation(
+    "Device Event History configuration validated. Enabled={Enabled}, WorkerId={WorkerId}, SourceCount={SourceCount}, SourceIds={SourceIds}, MongoConnectionStringConfigured={MongoConnectionStringConfigured}, Database={Database}, HistoryCollection={HistoryCollection}, FailureCollection={FailureCollection}, CheckpointCollection={CheckpointCollection}",
+    summary.Enabled,
+    summary.WorkerId,
+    summary.SourceCount,
+    string.Join(',', summary.SourceIds),
+    summary.MongoConnectionStringConfigured,
+    summary.DatabaseName,
+    summary.HistoryCollection,
+    summary.FailureCollection,
+    summary.CheckpointCollection);
+
+host.Run();

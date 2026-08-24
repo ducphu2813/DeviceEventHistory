@@ -1,0 +1,49 @@
+# Build output
+[Bb]in/
+[Oo]bj/
+[Aa]rtifacts/
+TestResults/
+BenchmarkDotNet.Artifacts/
+
+# IDE/editor settings
+.vs/
+.idea/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+*.DotSettings.user
+
+# Test and coverage output
+coverage/
+*.coverage
+*.coveragexml
+*.trx
+
+# Local configuration and secrets
+.env
+.env.*
+!.env.example
+appsettings*.json
+secrets.json
+
+# NuGet and package caches
+packages/
+*.nupkg
+*.snupkg
+
+# Runtime logs and local data
+*.log
+logs/
+data/
+tmp/
+
+# OS-generated files
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Tooling and generated files
+*.pidb
+*.pdb
+*.cache
