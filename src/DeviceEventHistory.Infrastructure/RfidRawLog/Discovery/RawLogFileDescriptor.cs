@@ -19,6 +19,8 @@ public sealed record RawLogFileDescriptor
 
     public required RawLogSourceMode Mode { get; init; }
 
+    public required string TimeZoneId { get; init; }
+
     public required DateOnly FolderDate { get; init; }
 
     public required long FileId { get; init; }
@@ -26,6 +28,8 @@ public sealed record RawLogFileDescriptor
     public required string FileName { get; init; }
 
     public required string Location { get; init; }
+
+    public required string RelativePath { get; init; }
 
     public long? Length { get; init; }
 
@@ -50,10 +54,12 @@ public sealed record RawLogFileDescriptor
             SourceId = source.SourceId.Trim(),
             CompanyId = source.CompanyId,
             Mode = source.Mode,
+            TimeZoneId = source.TimeZoneId.Trim(),
             FolderDate = folderDate,
             FileId = fileId,
             FileName = fileName,
             Location = location,
+            RelativePath = $"{folderDate.ToString(AppConst.RawLog.RelativePathDateFormat, CultureInfo.InvariantCulture)}/{fileName}",
             Length = length
         };
 

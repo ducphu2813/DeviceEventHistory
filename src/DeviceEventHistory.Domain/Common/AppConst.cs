@@ -12,7 +12,8 @@ public static class AppConst
     {
         public const string RootSection = "DeviceEventHistory";
         public const string RawLogSection = RootSection + ":RawLog";
-        public const string MongoDbSection = RootSection + ":MongoDb";
+        public const string DatabaseSettingsSection = RootSection + ":DatabaseSettings";
+        public const string MongoDbSection = DatabaseSettingsSection + ":MongoDb";
         public const string IngestionSection = RootSection + ":Ingestion";
     }
 
@@ -34,12 +35,37 @@ public static class AppConst
         public const int DefaultRetentionDays = 90;
         public const int FailureRetentionDays = 30;
         public const int PersistenceRetryCount = 5;
+        public const int PersistenceRetryDelayMilliseconds = 250;
+        public const int PersistenceRetryMaxDelayMilliseconds = 4_000;
         public const int ShutdownTimeoutSeconds = 30;
         public const int MaxRawPayloadBytes = 1024 * 1024;
     }
 
     public static class RawLog
     {
+        public const int SchemaVersion = 1;
+        public const string ParserVersion = "1.0";
+        public const string Producer = "RFID.Antenna";
+        public const string SourceKind = "rfid_antenna_file";
+        public const string PayloadFormat = "rfid-raw-v1";
+        public const string RelativePathDateFormat = "yyyy/MM/dd";
+        public const string HeaderBlock = "@";
+        public const string GateStateBlock = "b";
+        public const string SignalBlock = "t";
+        public const string BusinessEventBlock = "te";
+        public const string StyleProcessBlock = "sp";
+        public const string UserBlock = "u";
+        public const int HeaderFieldCount = 4;
+        public const int GateStateFieldCount = 1;
+        public const int SignalFieldCount = 9;
+        public const int BusinessEventFieldCount = 5;
+        public const int StyleProcessFieldCount = 1;
+        public const int UserFieldCount = 1;
+        public const char ProcessListSeparator = '-';
+        public const string HeaderTimeFormat = "hh\\:mm\\:ss";
+        public const string HeaderTimeShortFormat = "h\\:mm\\:ss";
+        public const string SignalDateTimeFormat = "dd/MM/yyyy HH:mm:ss";
+        public const string SignalDateTimeShortFormat = "d/M/yyyy H:mm:ss";
         public const string DefaultTimeZoneId = "SE Asia Standard Time";
         public const string DefaultFilePattern = "File_*.txt";
         public const string FilePatternRegex = @"^File_[A-Za-z0-9_?*.-]+\.txt$";
@@ -53,8 +79,32 @@ public static class AppConst
         public const string HistoryCollection = "device_event_history";
         public const string FailureCollection = "ingestion_failures";
         public const string CheckpointCollection = "ingestion_checkpoints";
+        public const string CheckpointKeySeparator = "|";
+        public const string CheckpointDateFormat = "yyyy-MM-dd";
+        public const string EventIdIndexName = "ux_event_id";
+        public const string FailureIdIndexName = "ux_failure_id";
+        public const string HistoryOccurredAtIndexName = "ix_occurred_at_utc_desc";
+        public const string HistoryDeviceOccurredAtIndexName = "ix_device_occurred_at_utc_desc";
+        public const string HistoryGateOccurredAtIndexName = "ix_gate_occurred_at_utc_desc";
+        public const string HistoryTagOccurredAtIndexName = "ix_tag_occurred_at_utc_desc";
+        public const string HistoryCategoryOccurredAtIndexName = "ix_category_occurred_at_utc_desc";
+        public const string HistoryParseReceivedAtIndexName = "ix_parse_received_at_utc_desc";
+        public const string HistorySourceOffsetIndexName = "ix_source_file_offset";
+        public const string FailureSourceOffsetIndexName = "ix_source_file_offset";
+        public const string FailureCodeReceivedAtIndexName = "ix_error_code_received_at_utc_desc";
+        public const string FailureResolvedAtIndexName = "ix_resolved_at_utc";
+        public const string CheckpointSourceIdentityIndexName = "ux_source_folder_file_path";
+        public const string CheckpointUpdatedAtIndexName = "ix_updated_at_utc_desc";
         public const string SystemCollectionPrefix = "system.";
         public const int MaxCollectionNameLength = 120;
+    }
+
+    public static class Identity
+    {
+        public const string EventPrefix = "event";
+        public const string FailurePrefix = "failure";
+        public const string Separator = "|";
+        public const string IsoDateTimeFormat = "O";
     }
 
     public static class Path
@@ -71,6 +121,8 @@ public static class AppConst
             "Device Event History Worker is disabled by configuration.";
         public const string IngestionNotImplementedMessage =
             "Worker is enabled, but the raw-log ingestion pipeline is not implemented in this work package.";
+        public const string MongoIndexesInitializedMessage =
+            "MongoDB collections and indexes initialized.";
     }
 
     public static class Messages
@@ -136,6 +188,14 @@ public static class AppConst
             "{0} contains invalid MongoDB database-name characters.";
         public const string MSG_MONGO_COLLECTION_NAME_INVALID =
             "{0} is not a valid MongoDB collection name.";
+        public const string MSG_CHECKPOINT_POSITION_INVALID =
+            "Checkpoint position cannot be negative.";
+        public const string MSG_CHECKPOINT_POSITION_REGRESSION =
+            "Checkpoint position cannot move backwards from {0} to {1}.";
+        public const string MSG_CHECKPOINT_ADVANCE_CONFLICT =
+            "Checkpoint version conflict was detected for '{0}'.";
+        public const string MSG_PERSISTENCE_OUTCOME_REQUIRED =
+            "A raw record processing result must contain an event or failure.";
         public const string MSG_NO_RAW_LOG_DISCOVERY_ADAPTER =
             "No raw-log discovery adapter is registered for mode '{0}'.";
         public const string MSG_RAW_LOG_CHUNK_NOT_CONTIGUOUS =
@@ -146,5 +206,34 @@ public static class AppConst
             "No raw-log tail reader is registered for mode '{0}'.";
         public const string MSG_REMOTE_RANGE_REQUEST_IGNORED =
             "Remote raw-log server ignored the byte range request for '{0}'.";
+        public const string MSG_RAW_RECORD_HEADER_REQUIRED =
+            "The raw record must contain exactly one valid '@(...)' header block.";
+        public const string MSG_RAW_BLOCK_MALFORMED =
+            "Raw block '{0}' is malformed.";
+        public const string MSG_RAW_BLOCK_FIELD_COUNT =
+            "Raw block '{0}' must contain {1} fields but contains {2}.";
+        public const string MSG_RAW_BLOCK_FIELD_INVALID =
+            "Raw block '{0}' field {1} has an invalid value: '{2}'.";
+        public const string MSG_RAW_BLOCK_UNKNOWN =
+            "Unknown raw block '{0}' was preserved without canonical mapping.";
+        public const string MSG_RAW_TIME_ZONE_INVALID =
+            "Source time zone '{0}' is unavailable for raw timestamp conversion.";
+    }
+
+    public static class Categories
+    {
+        public const string TagRead = "tag_read";
+        public const string BusinessProcess = "business_process";
+        public const string Unknown = "unknown";
+    }
+
+    public static class Parsing
+    {
+        public const string StatusParsed = "parsed";
+        public const string StatusParsedWithWarnings = "parsed_with_warnings";
+        public const string InvalidRecordFormat = "INVALID_RECORD_FORMAT";
+        public const string InvalidRawBlock = "INVALID_RAW_BLOCK";
+        public const string UnknownRawBlock = "UNKNOWN_RAW_BLOCK";
+        public const string InvalidSourceTimeZone = "INVALID_SOURCE_TIME_ZONE";
     }
 }

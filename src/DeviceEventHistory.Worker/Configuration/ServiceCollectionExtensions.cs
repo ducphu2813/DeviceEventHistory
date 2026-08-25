@@ -1,11 +1,18 @@
 using DeviceEventHistory.Application.Metadata;
+using DeviceEventHistory.Application.Parsing;
+using DeviceEventHistory.Application.Persistence;
 using DeviceEventHistory.Domain.Common;
 using DeviceEventHistory.Infrastructure.Metadata;
+using DeviceEventHistory.Infrastructure.MongoDb;
 using DeviceEventHistory.Infrastructure.MongoDb.Configuration;
+using DeviceEventHistory.Infrastructure.MongoDb.Execution;
+using DeviceEventHistory.Infrastructure.MongoDb.Indexes;
+using DeviceEventHistory.Infrastructure.MongoDb.Stores;
 using DeviceEventHistory.Infrastructure.RfidRawLog.Discovery;
 using DeviceEventHistory.Infrastructure.RfidRawLog.Configuration;
 using DeviceEventHistory.Infrastructure.RfidRawLog.Framing;
 using DeviceEventHistory.Infrastructure.RfidRawLog.Reading;
+using DeviceEventHistory.Infrastructure.RfidRawLog.Parsing;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
@@ -72,6 +79,23 @@ public static class ServiceCollectionExtensions
         services.AddTransient<IRawLogRecordFramer>(serviceProvider =>
             new RawLogRecordFramer(
                 serviceProvider.GetRequiredService<IOptions<RfidRawLogOptions>>().Value.MaxRecordBytes));
+
+        services.AddSingleton<BlockTokenizer>();
+        services.AddSingleton<IRfidRawRecordParser, RfidRawRecordParser>();
+        services.AddSingleton<IRawRecordCanonicalMapper, CanonicalDeviceEventMapper>();
+        services.AddSingleton<IProcessRawFileRecordHandler, ProcessRawFileRecordHandler>();
+
+        services.AddSingleton<MongoDbContext>(serviceProvider =>
+            new MongoDbContext(
+                serviceProvider.GetRequiredService<IOptions<MongoDbOptions>>().Value));
+        services.AddSingleton<MongoRetryPolicy>(serviceProvider =>
+            new MongoRetryPolicy(
+                serviceProvider.GetRequiredService<IOptions<IngestionOptions>>().Value.PersistenceRetryCount));
+        services.AddSingleton<MongoIndexInitializer>();
+        services.AddSingleton<IDeviceEventHistoryWriter, MongoDeviceEventHistoryWriter>();
+        services.AddSingleton<IIngestionFailureWriter, MongoIngestionFailureWriter>();
+        services.AddSingleton<IIngestionCheckpointStore, MongoIngestionCheckpointStore>();
+        services.AddSingleton<IRawRecordPersistenceCoordinator, RawRecordPersistenceCoordinator>();
 
         return services;
     }
