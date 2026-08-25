@@ -66,6 +66,10 @@ Domain <- Application <- Infrastructure <- Worker
 - History/failure writer phải coi duplicate deterministic identity là idempotent success; không update hoặc xóa history append-only khi checkpoint lỗi.
 - Checkpoint phải lưu theo `SourceId + FolderDate + FileId + RelativePath`, dùng `long` byte position và compare-and-set theo `version`; conflict không được ghi đè âm thầm.
 - Trình tự bắt buộc là persist history/failure, nhận Mongo confirmation, rồi mới advance checkpoint. Mongo unavailable hoặc CAS conflict giữ nguyên checkpoint.
+- Orchestration giữ một logical state cho mỗi file, nhưng giới hạn consumer bằng `MaxConcurrentFiles`; không tạo một OS thread cố định cho từng file.
+- Mỗi file được xử lý theo turn budget (`MaxBytesPerTurn`, `MaxRecordsPerTurn`, `MaxTurnDuration`); backlog phải requeue cuối hàng để bảo đảm fairness.
+- Partial record chỉ giữ trong framer state tạm thời; durable checkpoint luôn trỏ tới contiguous prefix đã persist xác nhận.
+- File bị truncate/replaced phải chuyển sang stopped state và giữ checkpoint cũ; không tự reset hoặc bỏ qua dữ liệu.
 
 ## 7. MongoDB persistence
 

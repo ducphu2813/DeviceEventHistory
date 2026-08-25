@@ -73,6 +73,9 @@ public sealed class RfidRawLogOptionsValidator(IOptions<WorkerOptions> workerOpt
         if (options.MaxRecordBytes <= 0) failures.Add(AppConst.Messages.MSG_MAX_RECORD_BYTES_POSITIVE);
         if (options.LookbackDays < 0) failures.Add(AppConst.Messages.MSG_LOOKBACK_DAYS_NON_NEGATIVE);
         if (options.MaxConcurrentFiles <= 0) failures.Add(AppConst.Messages.MSG_MAX_CONCURRENT_FILES_POSITIVE);
+        if (options.MaxBytesPerTurn <= 0) failures.Add(AppConst.Messages.MSG_MAX_BYTES_PER_TURN_POSITIVE);
+        if (options.MaxRecordsPerTurn <= 0) failures.Add(AppConst.Messages.MSG_MAX_RECORDS_PER_TURN_POSITIVE);
+        if (options.MaxTurnDuration <= TimeSpan.Zero) failures.Add(AppConst.Messages.MSG_MAX_TURN_DURATION_POSITIVE);
 
         ValidatePolicy(options.StartupExistingFilePolicy, nameof(options.StartupExistingFilePolicy), failures);
         ValidatePolicy(options.NewFilePolicy, nameof(options.NewFilePolicy), failures);

@@ -31,6 +31,10 @@ public static class AppConst
         public const int MaxRecordBytes = 1024 * 1024;
         public const int LookbackDays = 1;
         public const int MaxConcurrentFiles = 4;
+        public const int MaxBytesPerTurn = 2 * 1024 * 1024;
+        public const int MaxRecordsPerTurn = 1_000;
+        public const int MaxTurnDurationMilliseconds = 250;
+        public const int SchedulerQueueMultiplier = 4;
         public const int RemoteRequestTimeoutSeconds = 30;
         public const int DefaultRetentionDays = 90;
         public const int FailureRetentionDays = 30;
@@ -119,10 +123,24 @@ public static class AppConst
             "Device Event History configuration validated.";
         public const string WorkerDisabledMessage =
             "Device Event History Worker is disabled by configuration.";
-        public const string IngestionNotImplementedMessage =
-            "Worker is enabled, but the raw-log ingestion pipeline is not implemented in this work package.";
         public const string MongoIndexesInitializedMessage =
             "MongoDB collections and indexes initialized.";
+        public const string IngestionStartedMessage =
+            "Raw-log ingestion orchestration started.";
+        public const string IngestionStoppedMessage =
+            "Raw-log ingestion orchestration stopped.";
+        public const string SourceDiscoveryFailedMessage =
+            "Raw-log source discovery failed for SourceId={SourceId}.";
+        public const string FileStateInitializationFailedMessage =
+            "Raw-log file state initialization failed for SourceId={SourceId}, FileId={FileId}, FolderDate={FolderDate}.";
+        public const string FileProcessingFailedMessage =
+            "Raw-log file turn failed for SourceId={SourceId}, FileId={FileId}, FolderDate={FolderDate}, Position={Position}.";
+        public const string FileTruncatedMessage =
+            "Raw-log file was truncated or replaced; processing stopped for SourceId={SourceId}, FileId={FileId}, FolderDate={FolderDate}, Position={Position}.";
+        public const string FileCheckpointConflictMessage =
+            "Raw-log checkpoint conflict detected for SourceId={SourceId}, FileId={FileId}, FolderDate={FolderDate}.";
+        public const string FileTurnStoppedMessage =
+            "Raw-log file processing stopped for SourceId={SourceId}, FileId={FileId}, FolderDate={FolderDate}.";
     }
 
     public static class Messages
@@ -152,6 +170,12 @@ public static class AppConst
             "LookbackDays cannot be negative.";
         public const string MSG_MAX_CONCURRENT_FILES_POSITIVE =
             "MaxConcurrentFiles must be greater than zero.";
+        public const string MSG_MAX_BYTES_PER_TURN_POSITIVE =
+            "MaxBytesPerTurn must be greater than zero.";
+        public const string MSG_MAX_RECORDS_PER_TURN_POSITIVE =
+            "MaxRecordsPerTurn must be greater than zero.";
+        public const string MSG_MAX_TURN_DURATION_POSITIVE =
+            "MaxTurnDuration must be greater than zero.";
         public const string MSG_SOURCES_REQUIRED =
             "At least one raw-log source is required when the Worker is enabled.";
         public const string MSG_SOURCE_ID_REQUIRED =
@@ -196,6 +220,10 @@ public static class AppConst
             "Checkpoint version conflict was detected for '{0}'.";
         public const string MSG_PERSISTENCE_OUTCOME_REQUIRED =
             "A raw record processing result must contain an event or failure.";
+        public const string MSG_CHECKPOINT_CONFIRMATION_REQUIRED =
+            "Checkpoint advance was not confirmed after persistence.";
+        public const string MSG_RAW_LOG_STATE_STOPPED =
+            "Raw-log file state is stopped and cannot process another turn.";
         public const string MSG_NO_RAW_LOG_DISCOVERY_ADAPTER =
             "No raw-log discovery adapter is registered for mode '{0}'.";
         public const string MSG_RAW_LOG_CHUNK_NOT_CONTIGUOUS =

@@ -13,8 +13,11 @@ using DeviceEventHistory.Infrastructure.RfidRawLog.Configuration;
 using DeviceEventHistory.Infrastructure.RfidRawLog.Framing;
 using DeviceEventHistory.Infrastructure.RfidRawLog.Reading;
 using DeviceEventHistory.Infrastructure.RfidRawLog.Parsing;
+using DeviceEventHistory.Worker.Orchestration;
+using DeviceEventHistory.Worker.HostedServices;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
 
 namespace DeviceEventHistory.Worker.Configuration;
@@ -25,6 +28,14 @@ public static class ServiceCollectionExtensions
         this IServiceCollection services,
         IConfiguration configuration)
     {
+        services.Configure<HostOptions>(options =>
+        {
+            options.ShutdownTimeout = configuration.GetSection(IngestionOptions.SectionName)
+                .GetValue(
+                    nameof(IngestionOptions.ShutdownTimeout),
+                    TimeSpan.FromSeconds(AppConst.Defaults.ShutdownTimeoutSeconds));
+        });
+
         services.AddOptions<WorkerOptions>()
             .Bind(configuration.GetSection(WorkerOptions.SectionName))
             .ValidateOnStart();
@@ -79,6 +90,8 @@ public static class ServiceCollectionExtensions
         services.AddTransient<IRawLogRecordFramer>(serviceProvider =>
             new RawLogRecordFramer(
                 serviceProvider.GetRequiredService<IOptions<RfidRawLogOptions>>().Value.MaxRecordBytes));
+        services.AddSingleton<Func<IRawLogRecordFramer>>(serviceProvider =>
+            () => serviceProvider.GetRequiredService<IRawLogRecordFramer>());
 
         services.AddSingleton<BlockTokenizer>();
         services.AddSingleton<IRfidRawRecordParser, RfidRawRecordParser>();
@@ -96,6 +109,24 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IIngestionFailureWriter, MongoIngestionFailureWriter>();
         services.AddSingleton<IIngestionCheckpointStore, MongoIngestionCheckpointStore>();
         services.AddSingleton<IRawRecordPersistenceCoordinator, RawRecordPersistenceCoordinator>();
+
+        services.AddSingleton<FileRegistry>();
+        services.AddSingleton<FileTurnProcessor>();
+        services.AddSingleton<FairFileScheduler>(serviceProvider =>
+        {
+            var rawLog = serviceProvider.GetRequiredService<IOptions<RfidRawLogOptions>>().Value;
+            var queueCapacity = Math.Max(
+                rawLog.MaxConcurrentFiles,
+                rawLog.MaxConcurrentFiles * AppConst.Defaults.SchedulerQueueMultiplier);
+            return new FairFileScheduler(
+                rawLog.MaxConcurrentFiles,
+                queueCapacity,
+                serviceProvider.GetRequiredService<FileTurnProcessor>(),
+                serviceProvider.GetRequiredService<ILogger<FairFileScheduler>>());
+        });
+        services.AddSingleton<SourcePollingCoordinator>();
+        services.AddSingleton<GracefulShutdownCoordinator>();
+        services.AddHostedService<StartupInitializationHostedService>();
 
         return services;
     }

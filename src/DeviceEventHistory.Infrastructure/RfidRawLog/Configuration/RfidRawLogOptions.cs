@@ -16,6 +16,13 @@ public sealed class RfidRawLogOptions
 
     public int MaxConcurrentFiles { get; set; } = AppConst.Defaults.MaxConcurrentFiles;
 
+    public int MaxBytesPerTurn { get; set; } = AppConst.Defaults.MaxBytesPerTurn;
+
+    public int MaxRecordsPerTurn { get; set; } = AppConst.Defaults.MaxRecordsPerTurn;
+
+    public TimeSpan MaxTurnDuration { get; set; } =
+        TimeSpan.FromMilliseconds(AppConst.Defaults.MaxTurnDurationMilliseconds);
+
     public FileStartPositionPolicy StartupExistingFilePolicy { get; set; } = FileStartPositionPolicy.End;
 
     public FileStartPositionPolicy NewFilePolicy { get; set; } = FileStartPositionPolicy.Beginning;
