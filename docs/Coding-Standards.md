@@ -13,8 +13,8 @@ Các quy tắc này giữ cho solution dễ đọc, dễ kiểm thử và có th
 - Không lặp lại section name, collection name, environment-variable name hoặc default kỹ thuật trong nhiều class.
 - Options class chỉ bind configuration và cung cấp default an toàn từ `AppConst`; không tự gọi MongoDB, filesystem hoặc network.
 - Giá trị theo môi trường phải đến từ configuration provider, environment variable hoặc User Secrets.
-- Validation message ổn định phải được đặt trong `AppConst.Messages` với prefix `MSG_`; message có tham số dùng format placeholder và formatter chung.
-- Diagnostic message chỉ dùng một lần ngoài validation có thể để tại nơi sử dụng nếu không phải contract vận hành.
+- Validation và operational error message ổn định phải được đặt trong `AppConst.Messages` với prefix `MSG_`; message có tham số dùng format placeholder và formatter chung.
+- Không đặt message exception, adapter failure hoặc protocol failure trực tiếp trong source xử lý; chỉ exception type, parameter name và structured data được giữ tại nơi sử dụng.
 
 ## 3. Ranh giới project
 
@@ -44,22 +44,34 @@ Domain <- Application <- Infrastructure <- Worker
 - File raw-log chỉ được mở read-only và share-compatible với writer.
 - Offset file luôn là byte offset `long`; không dùng character count làm checkpoint.
 - Không commit checkpoint trước khi persistence được xác nhận.
+- Source có thể đọc bằng `Local` hoặc `RemoteHttp`; local dùng `RootPath`, remote dùng `RemoteBaseUrl`.
+- Remote URL không chứa credential, query token hoặc fragment; remote tail reader phải dùng HTTP Range và không tải lại toàn bộ file cho mỗi offset.
+- Discovery chỉ nhận diện file có dạng `File_{FileId}.txt` với `FileId` là `long`; file không xác định được identity phải bị bỏ qua và không được tạo checkpoint giả.
+- Record framer làm việc trên bytes UTF-8, giữ partial record giữa các chunk và chỉ phát record sau marker `e(0)`.
 
-## 6. Logging và bảo mật
+## 6. WP3 file discovery và framing
+
+- Discovery duyệt các thư mục `yyyy/MM/dd` trong khoảng `LookbackDays` theo timezone của từng source.
+- Existing file bắt đầu tại `End`, new file bắt đầu tại `Beginning`; policy này được giữ ở tầng orchestration đọc file, không nhúng vào adapter local/remote.
+- `RawLogFileDescriptor` phải giữ đủ `SourceId`, `CompanyId`, `FolderDate`, `FileId`, mode và location để checkpoint/persistence phía sau không phải suy luận lại identity.
+- Tail reader trả về `StartOffset`, `NextOffset`, `FileLength`, bytes đọc và trạng thái truncation. Offset luôn là byte offset `long`.
+- WP3 không ghi MongoDB và không commit checkpoint. Chỉ persistence thành công ở work package sau mới được phép advance checkpoint.
+
+## 7. Logging và bảo mật
 
 - Dùng structured logging với property rõ nghĩa.
 - Không log connection string, password, token, full raw payload hoặc secret-bearing query string.
 - Raw path môi trường thật chỉ xuất hiện trong diagnostic scope cần thiết; không đưa vào metric label có cardinality cao.
 - Configuration mẫu phải dùng placeholder an toàn và không chứa credential thật.
 
-## 7. Testing
+## 8. Testing
 
 - Mỗi rule validation quan trọng phải có unit test cho cả trường hợp hợp lệ và không hợp lệ.
 - Test parser/framer phải bao phủ partial record, nhiều record, UTF-8 boundary và restart.
 - Integration test mới được dùng MongoDB/filesystem thật hoặc container; unit test không giả nhận là end-to-end.
 - Không deduplicate business event chỉ vì raw payload giống nhau; idempotency dùng deterministic event identity.
 
-## 8. Quy ước đặt tên
+## 9. Quy ước đặt tên
 
 - Type, method, property và constant dùng PascalCase.
 - Riêng message constant trong `AppConst.Messages` dùng prefix `MSG_` và chữ hoa toàn bộ để dễ nhận diện khi đọc flow xử lý lỗi.
@@ -68,7 +80,7 @@ Domain <- Application <- Infrastructure <- Worker
 - Options kết thúc bằng `Options`; validator kết thúc bằng `Validator`; adapter triển khai interface phải có tên thể hiện technology/source.
 - Một file nên chứa một public type chính, trừ các record/value type nhỏ gắn chặt với type chính.
 
-## 9. Review checklist
+## 10. Review checklist
 
 - Có magic string/number mới cần đưa vào `AppConst` hoặc configuration không?
 - Có dependency đi ngược layer không?

@@ -1,4 +1,5 @@
 using DeviceEventHistory.Domain.Common;
+using DeviceEventHistory.Application.Metadata;
 using DeviceEventHistory.Infrastructure.MongoDb.Configuration;
 using DeviceEventHistory.Infrastructure.RfidRawLog.Configuration;
 using DeviceEventHistory.Worker.Configuration;
@@ -105,6 +106,40 @@ public sealed class ConfigurationValidationTests
 
         Assert.True(new RfidRawLogOptionsValidator(Options.Create(worker)).Validate(null, rawLog).Succeeded);
         Assert.True(new MongoDbOptionsValidator(Options.Create(worker)).Validate(null, mongo).Succeeded);
+    }
+
+    [Fact]
+    public void Remote_http_source_configuration_is_valid_without_a_local_root_path()
+    {
+        var options = CreateRawLog();
+        options.Sources[0].Mode = RawLogSourceMode.RemoteHttp;
+        options.Sources[0].RootPath = string.Empty;
+        options.Sources[0].RemoteBaseUrl = "http://192.168.1.38:8091/logs/RawData/";
+
+        var result = new RfidRawLogOptionsValidator(
+            Options.Create(new WorkerOptions { Enabled = true, WorkerId = "worker-01" }))
+            .Validate(null, options);
+
+        Assert.True(result.Succeeded);
+    }
+
+    [Theory]
+    [InlineData("relative/logs")]
+    [InlineData("ftp://192.168.1.38/logs/")]
+    [InlineData("http://192.168.1.38/logs/?token=secret")]
+    public void Remote_http_source_rejects_unsafe_base_urls(string baseUrl)
+    {
+        var options = CreateRawLog();
+        options.Sources[0].Mode = RawLogSourceMode.RemoteHttp;
+        options.Sources[0].RootPath = string.Empty;
+        options.Sources[0].RemoteBaseUrl = baseUrl;
+
+        var result = new RfidRawLogOptionsValidator(
+            Options.Create(new WorkerOptions { Enabled = true, WorkerId = "worker-01" }))
+            .Validate(null, options);
+
+        Assert.False(result.Succeeded);
+        Assert.Contains(result.Failures!, failure => failure.Contains("RemoteBaseUrl", StringComparison.Ordinal));
     }
 
     [Fact]

@@ -1,6 +1,6 @@
-using System.Globalization;
 using System.Text.RegularExpressions;
 
+using DeviceEventHistory.Application.Metadata;
 using DeviceEventHistory.Domain.Common;
 using DeviceEventHistory.Infrastructure.MongoDb.Configuration;
 using DeviceEventHistory.Infrastructure.RfidRawLog.Configuration;
@@ -11,7 +11,7 @@ namespace DeviceEventHistory.Worker.Configuration;
 internal static class ValidationMessageFormatter
 {
     public static string Format(string message, params object[] arguments) =>
-        string.Format(CultureInfo.InvariantCulture, message, arguments);
+        AppConst.Messages.Format(message, arguments);
 }
 
 public sealed class WorkerOptionsValidator : IValidateOptions<WorkerOptions>
@@ -104,9 +104,44 @@ public sealed class RfidRawLogOptionsValidator(IOptions<WorkerOptions> workerOpt
         else if (!sourceIds.Add(sourceId)) failures.Add(ValidationMessageFormatter.Format(AppConst.Messages.MSG_SOURCE_ID_DUPLICATED, prefix, sourceId));
         if (source.CompanyId <= 0) failures.Add(ValidationMessageFormatter.Format(AppConst.Messages.MSG_COMPANY_ID_POSITIVE, prefix));
 
-        ValidateAbsoluteRootPath(source.RootPath, prefix, failures);
+        ValidateSourceMode(source.Mode, prefix, failures);
+        if (source.Mode == RawLogSourceMode.Local)
+        {
+            ValidateAbsoluteRootPath(source.RootPath, prefix, failures);
+        }
+        else if (source.Mode == RawLogSourceMode.RemoteHttp)
+        {
+            ValidateRemoteBaseUrl(source.RemoteBaseUrl, prefix, failures);
+        }
+
         ValidateTimeZone(source.TimeZoneId, prefix, failures);
         ValidateFilePattern(source.FilePattern, prefix, failures);
+    }
+
+    private static void ValidateSourceMode(RawLogSourceMode mode, string prefix, ICollection<string> failures)
+    {
+        if (!Enum.IsDefined(mode))
+        {
+            failures.Add(ValidationMessageFormatter.Format(AppConst.Messages.MSG_SOURCE_MODE_UNSUPPORTED, prefix));
+        }
+    }
+
+    private static void ValidateRemoteBaseUrl(string baseUrl, string prefix, ICollection<string> failures)
+    {
+        if (string.IsNullOrWhiteSpace(baseUrl))
+        {
+            failures.Add(ValidationMessageFormatter.Format(AppConst.Messages.MSG_REMOTE_BASE_URL_REQUIRED, prefix));
+            return;
+        }
+
+        if (!Uri.TryCreate(baseUrl.Trim(), UriKind.Absolute, out var uri) ||
+            (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps) ||
+            !string.IsNullOrEmpty(uri.Query) ||
+            !string.IsNullOrEmpty(uri.Fragment) ||
+            !string.IsNullOrEmpty(uri.UserInfo))
+        {
+            failures.Add(ValidationMessageFormatter.Format(AppConst.Messages.MSG_REMOTE_BASE_URL_INVALID, prefix));
+        }
     }
 
     private static void ValidateAbsoluteRootPath(string rootPath, string prefix, ICollection<string> failures)

@@ -15,6 +15,8 @@ public sealed class ConfigurationDeviceMetadataResolver : IDeviceMetadataResolve
                 SourceId = source.SourceId.Trim(),
                 CompanyId = source.CompanyId,
                 RootPath = source.RootPath.Trim(),
+                Mode = source.Mode,
+                RemoteBaseUrl = source.RemoteBaseUrl.Trim(),
                 TimeZoneId = source.TimeZoneId.Trim(),
                 FilePattern = source.FilePattern.Trim(),
                 Enabled = source.Enabled

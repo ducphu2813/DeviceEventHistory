@@ -11,6 +11,10 @@ public sealed record SourceDefinition
 
     public required string RootPath { get; init; }
 
+    public required RawLogSourceMode Mode { get; init; }
+
+    public required string RemoteBaseUrl { get; init; }
+
     public required string TimeZoneId { get; init; }
 
     public required string FilePattern { get; init; }

@@ -1,3 +1,5 @@
+using System.Globalization;
+
 namespace DeviceEventHistory.Domain.Common;
 
 /// <summary>
@@ -28,6 +30,7 @@ public static class AppConst
         public const int MaxRecordBytes = 1024 * 1024;
         public const int LookbackDays = 1;
         public const int MaxConcurrentFiles = 4;
+        public const int RemoteRequestTimeoutSeconds = 30;
         public const int DefaultRetentionDays = 90;
         public const int FailureRetentionDays = 30;
         public const int PersistenceRetryCount = 5;
@@ -41,6 +44,7 @@ public static class AppConst
         public const string DefaultFilePattern = "File_*.txt";
         public const string FilePatternRegex = @"^File_[A-Za-z0-9_?*.-]+\.txt$";
         public const string RecordTerminator = "e(0)";
+        public const string FileNameRegex = @"^File_(?<fileId>\d+)\.txt$";
     }
 
     public static class MongoDb
@@ -71,6 +75,9 @@ public static class AppConst
 
     public static class Messages
     {
+        public static string Format(string message, params object[] arguments) =>
+            string.Format(CultureInfo.InvariantCulture, message, arguments);
+
         public const string MSG_WORKER_ID_REQUIRED =
             "WorkerId is required when the Worker is enabled.";
         public const string MSG_DEFAULT_RETENTION_DAYS_POSITIVE =
@@ -115,6 +122,12 @@ public static class AppConst
             "{0}.TimeZoneId '{1}' is invalid.";
         public const string MSG_FILE_PATTERN_SAFE =
             "{0}.FilePattern must be a safe {1} file-name pattern without path traversal.";
+        public const string MSG_SOURCE_MODE_UNSUPPORTED =
+            "{0}.Mode has an unsupported value.";
+        public const string MSG_REMOTE_BASE_URL_REQUIRED =
+            "{0}.RemoteBaseUrl is required when Mode is RemoteHttp.";
+        public const string MSG_REMOTE_BASE_URL_INVALID =
+            "{0}.RemoteBaseUrl must be an absolute HTTP or HTTPS URL without query or fragment.";
         public const string MSG_POLICY_UNSUPPORTED =
             "{0} has an unsupported value.";
         public const string MSG_CONNECTION_STRING_REQUIRED =
@@ -123,5 +136,15 @@ public static class AppConst
             "{0} contains invalid MongoDB database-name characters.";
         public const string MSG_MONGO_COLLECTION_NAME_INVALID =
             "{0} is not a valid MongoDB collection name.";
+        public const string MSG_NO_RAW_LOG_DISCOVERY_ADAPTER =
+            "No raw-log discovery adapter is registered for mode '{0}'.";
+        public const string MSG_RAW_LOG_CHUNK_NOT_CONTIGUOUS =
+            "The incoming chunk is not contiguous with the pending raw-log bytes.";
+        public const string MSG_RAW_LOG_RECORD_TOO_LARGE =
+            "A raw-log record exceeded the configured maximum of {0} bytes.";
+        public const string MSG_NO_RAW_LOG_TAIL_READER =
+            "No raw-log tail reader is registered for mode '{0}'.";
+        public const string MSG_REMOTE_RANGE_REQUEST_IGNORED =
+            "Remote raw-log server ignored the byte range request for '{0}'.";
     }
 }
