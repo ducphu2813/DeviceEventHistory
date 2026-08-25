@@ -1,20 +1,22 @@
+using DeviceEventHistory.Domain.Common;
+
 namespace DeviceEventHistory.Infrastructure.MongoDb.Configuration;
 
 public sealed class MongoDbOptions
 {
-    public const string SectionName = "DeviceEventHistory:MongoDb";
+    public const string SectionName = AppConst.Configuration.MongoDbSection;
 
     public string ConnectionString { get; set; } = string.Empty;
 
-    public string ConnectionStringEnvironmentVariable { get; set; } = "DEVICE_EVENT_HISTORY_MONGODB_CONNECTION_STRING";
+    public string ConnectionStringEnvironmentVariable { get; set; } = AppConst.EnvironmentVariables.MongoDbConnectionString;
 
-    public string DatabaseName { get; set; } = "device_event_history";
+    public string DatabaseName { get; set; } = AppConst.MongoDb.DefaultDatabaseName;
 
-    public string HistoryCollection { get; set; } = "device_event_history";
+    public string HistoryCollection { get; set; } = AppConst.MongoDb.HistoryCollection;
 
-    public string FailureCollection { get; set; } = "ingestion_failures";
+    public string FailureCollection { get; set; } = AppConst.MongoDb.FailureCollection;
 
-    public string CheckpointCollection { get; set; } = "ingestion_checkpoints";
+    public string CheckpointCollection { get; set; } = AppConst.MongoDb.CheckpointCollection;
 
     public void ApplyEnvironmentConnectionString()
     {

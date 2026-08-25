@@ -1,3 +1,4 @@
+using DeviceEventHistory.Domain.Common;
 using DeviceEventHistory.Infrastructure.MongoDb.Configuration;
 using DeviceEventHistory.Infrastructure.RfidRawLog.Configuration;
 using DeviceEventHistory.Worker.Configuration;
@@ -7,6 +8,23 @@ namespace DeviceEventHistory.UnitTests;
 
 public sealed class ConfigurationValidationTests
 {
+    [Fact]
+    public void Option_defaults_are_defined_by_shared_application_constants()
+    {
+        var worker = new WorkerOptions();
+        var rawLog = new RfidRawLogOptions();
+        var mongo = new MongoDbOptions();
+        var ingestion = new IngestionOptions();
+
+        Assert.Equal(AppConst.Defaults.WorkerEnabled, worker.Enabled);
+        Assert.Equal(AppConst.Defaults.WorkerId, worker.WorkerId);
+        Assert.Equal(AppConst.Defaults.ReadBufferBytes, rawLog.ReadBufferBytes);
+        Assert.Equal(AppConst.Defaults.MaxRecordBytes, rawLog.MaxRecordBytes);
+        Assert.Equal(AppConst.RawLog.DefaultFilePattern, new AntennaSourceOptions().FilePattern);
+        Assert.Equal(AppConst.MongoDb.DefaultDatabaseName, mongo.DatabaseName);
+        Assert.Equal(AppConst.Defaults.DefaultRetentionDays, ingestion.DefaultRetentionDays);
+    }
+
     [Fact]
     public void Enabled_valid_configuration_passes_all_validators()
     {
@@ -31,7 +49,7 @@ public sealed class ConfigurationValidationTests
             RootPath = "D:/RFID/RawData-2",
             CompanyId = 2,
             TimeZoneId = "UTC",
-            FilePattern = "File_*.txt"
+            FilePattern = AppConst.RawLog.DefaultFilePattern
         });
 
         var result = new RfidRawLogOptionsValidator(
@@ -113,7 +131,7 @@ public sealed class ConfigurationValidationTests
                 RootPath = "D:/RFID/RawData",
                 CompanyId = 2,
                 TimeZoneId = "UTC",
-                FilePattern = "File_*.txt"
+            FilePattern = AppConst.RawLog.DefaultFilePattern
             }
         ]
     };

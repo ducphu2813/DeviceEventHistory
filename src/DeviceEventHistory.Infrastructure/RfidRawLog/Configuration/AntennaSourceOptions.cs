@@ -1,3 +1,5 @@
+using DeviceEventHistory.Domain.Common;
+
 namespace DeviceEventHistory.Infrastructure.RfidRawLog.Configuration;
 
 public sealed class AntennaSourceOptions
@@ -8,9 +10,9 @@ public sealed class AntennaSourceOptions
 
     public int CompanyId { get; set; }
 
-    public string TimeZoneId { get; set; } = "SE Asia Standard Time";
+    public string TimeZoneId { get; set; } = AppConst.RawLog.DefaultTimeZoneId;
 
-    public string FilePattern { get; set; } = "File_*.txt";
+    public string FilePattern { get; set; } = AppConst.RawLog.DefaultFilePattern;
 
     public bool Enabled { get; set; } = true;
 }

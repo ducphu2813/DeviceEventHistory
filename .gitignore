@@ -44,6 +44,9 @@ Thumbs.db
 Desktop.ini
 
 # Tooling and generated files
+node_modules/
+pptx-build/
+pptx-*/
 *.pidb
 *.pdb
 *.cache

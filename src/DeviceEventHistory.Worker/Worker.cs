@@ -1,4 +1,5 @@
 using DeviceEventHistory.Worker.Configuration;
+using DeviceEventHistory.Domain.Common;
 using Microsoft.Extensions.Options;
 
 namespace DeviceEventHistory.Worker;
@@ -9,16 +10,12 @@ public class Worker(ILogger<Worker> logger, IOptions<WorkerOptions> workerOption
     {
         if (!workerOptions.Value.Enabled)
         {
-            logger.LogInformation("Device Event History Worker is disabled by configuration.");
+            logger.LogInformation(AppConst.Logging.WorkerDisabledMessage);
             await Task.Delay(Timeout.InfiniteTimeSpan, stoppingToken);
             return;
         }
 
-        logger.LogWarning("Worker is enabled, but the raw-log ingestion pipeline is not implemented in this work package.");
-
-        while (!stoppingToken.IsCancellationRequested)
-        {
-            await Task.Delay(1000, stoppingToken);
-        }
+        logger.LogWarning(AppConst.Logging.IngestionNotImplementedMessage);
+        await Task.Delay(Timeout.InfiniteTimeSpan, stoppingToken);
     }
 }

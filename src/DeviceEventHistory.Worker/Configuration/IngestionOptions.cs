@@ -1,16 +1,18 @@
+using DeviceEventHistory.Domain.Common;
+
 namespace DeviceEventHistory.Worker.Configuration;
 
 public sealed class IngestionOptions
 {
-    public const string SectionName = "DeviceEventHistory:Ingestion";
+    public const string SectionName = AppConst.Configuration.IngestionSection;
 
-    public int DefaultRetentionDays { get; set; } = 90;
+    public int DefaultRetentionDays { get; set; } = AppConst.Defaults.DefaultRetentionDays;
 
-    public int FailureRetentionDays { get; set; } = 30;
+    public int FailureRetentionDays { get; set; } = AppConst.Defaults.FailureRetentionDays;
 
-    public int PersistenceRetryCount { get; set; } = 5;
+    public int PersistenceRetryCount { get; set; } = AppConst.Defaults.PersistenceRetryCount;
 
-    public TimeSpan ShutdownTimeout { get; set; } = TimeSpan.FromSeconds(30);
+    public TimeSpan ShutdownTimeout { get; set; } = TimeSpan.FromSeconds(AppConst.Defaults.ShutdownTimeoutSeconds);
 
-    public int MaxRawPayloadBytes { get; set; } = 1024 * 1024;
+    public int MaxRawPayloadBytes { get; set; } = AppConst.Defaults.MaxRawPayloadBytes;
 }

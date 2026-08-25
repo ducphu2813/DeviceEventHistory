@@ -1,9 +1,18 @@
+using System.Globalization;
+using System.Text.RegularExpressions;
+
+using DeviceEventHistory.Domain.Common;
 using DeviceEventHistory.Infrastructure.MongoDb.Configuration;
 using DeviceEventHistory.Infrastructure.RfidRawLog.Configuration;
 using Microsoft.Extensions.Options;
-using System.Text.RegularExpressions;
 
 namespace DeviceEventHistory.Worker.Configuration;
+
+internal static class ValidationMessageFormatter
+{
+    public static string Format(string message, params object[] arguments) =>
+        string.Format(CultureInfo.InvariantCulture, message, arguments);
+}
 
 public sealed class WorkerOptionsValidator : IValidateOptions<WorkerOptions>
 {
@@ -15,7 +24,7 @@ public sealed class WorkerOptionsValidator : IValidateOptions<WorkerOptions>
         }
 
         return string.IsNullOrWhiteSpace(options.WorkerId)
-            ? ValidateOptionsResult.Fail("WorkerId is required when the Worker is enabled.")
+            ? ValidateOptionsResult.Fail(AppConst.Messages.MSG_WORKER_ID_REQUIRED)
             : ValidateOptionsResult.Success;
     }
 }
@@ -31,11 +40,11 @@ public sealed class IngestionOptionsValidator(IOptions<WorkerOptions> workerOpti
         }
 
         var failures = new List<string>();
-        if (options.DefaultRetentionDays <= 0) failures.Add("DefaultRetentionDays must be greater than zero.");
-        if (options.FailureRetentionDays <= 0) failures.Add("FailureRetentionDays must be greater than zero.");
-        if (options.PersistenceRetryCount < 0) failures.Add("PersistenceRetryCount cannot be negative.");
-        if (options.ShutdownTimeout <= TimeSpan.Zero) failures.Add("ShutdownTimeout must be greater than zero.");
-        if (options.MaxRawPayloadBytes <= 0) failures.Add("MaxRawPayloadBytes must be greater than zero.");
+        if (options.DefaultRetentionDays <= 0) failures.Add(AppConst.Messages.MSG_DEFAULT_RETENTION_DAYS_POSITIVE);
+        if (options.FailureRetentionDays <= 0) failures.Add(AppConst.Messages.MSG_FAILURE_RETENTION_DAYS_POSITIVE);
+        if (options.PersistenceRetryCount < 0) failures.Add(AppConst.Messages.MSG_PERSISTENCE_RETRY_COUNT_NON_NEGATIVE);
+        if (options.ShutdownTimeout <= TimeSpan.Zero) failures.Add(AppConst.Messages.MSG_SHUTDOWN_TIMEOUT_POSITIVE);
+        if (options.MaxRawPayloadBytes <= 0) failures.Add(AppConst.Messages.MSG_MAX_RAW_PAYLOAD_BYTES_POSITIVE);
 
         return failures.Count == 0
             ? ValidateOptionsResult.Success
@@ -47,7 +56,7 @@ public sealed class RfidRawLogOptionsValidator(IOptions<WorkerOptions> workerOpt
     : IValidateOptions<RfidRawLogOptions>
 {
     private static readonly Regex FilePatternRegex = new(
-        @"^File_[A-Za-z0-9_?*.-]+\.txt$",
+        AppConst.RawLog.FilePatternRegex,
         RegexOptions.Compiled | RegexOptions.CultureInvariant);
 
     public ValidateOptionsResult Validate(string? name, RfidRawLogOptions options)
@@ -59,18 +68,18 @@ public sealed class RfidRawLogOptionsValidator(IOptions<WorkerOptions> workerOpt
 
         var failures = new List<string>();
 
-        if (options.PollInterval <= TimeSpan.Zero) failures.Add("PollInterval must be greater than zero.");
-        if (options.ReadBufferBytes <= 0) failures.Add("ReadBufferBytes must be greater than zero.");
-        if (options.MaxRecordBytes <= 0) failures.Add("MaxRecordBytes must be greater than zero.");
-        if (options.LookbackDays < 0) failures.Add("LookbackDays cannot be negative.");
-        if (options.MaxConcurrentFiles <= 0) failures.Add("MaxConcurrentFiles must be greater than zero.");
+        if (options.PollInterval <= TimeSpan.Zero) failures.Add(AppConst.Messages.MSG_POLL_INTERVAL_POSITIVE);
+        if (options.ReadBufferBytes <= 0) failures.Add(AppConst.Messages.MSG_READ_BUFFER_BYTES_POSITIVE);
+        if (options.MaxRecordBytes <= 0) failures.Add(AppConst.Messages.MSG_MAX_RECORD_BYTES_POSITIVE);
+        if (options.LookbackDays < 0) failures.Add(AppConst.Messages.MSG_LOOKBACK_DAYS_NON_NEGATIVE);
+        if (options.MaxConcurrentFiles <= 0) failures.Add(AppConst.Messages.MSG_MAX_CONCURRENT_FILES_POSITIVE);
 
         ValidatePolicy(options.StartupExistingFilePolicy, nameof(options.StartupExistingFilePolicy), failures);
         ValidatePolicy(options.NewFilePolicy, nameof(options.NewFilePolicy), failures);
 
         if (options.Sources.Count == 0)
         {
-            failures.Add("At least one raw-log source is required when the Worker is enabled.");
+            failures.Add(AppConst.Messages.MSG_SOURCES_REQUIRED);
         }
 
         var sourceIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -91,9 +100,9 @@ public sealed class RfidRawLogOptionsValidator(IOptions<WorkerOptions> workerOpt
         var prefix = $"Sources[{index}]";
         var sourceId = source.SourceId.Trim();
 
-        if (sourceId.Length == 0) failures.Add($"{prefix}.SourceId is required.");
-        else if (!sourceIds.Add(sourceId)) failures.Add($"{prefix}.SourceId '{sourceId}' is duplicated.");
-        if (source.CompanyId <= 0) failures.Add($"{prefix}.CompanyId must be greater than zero.");
+        if (sourceId.Length == 0) failures.Add(ValidationMessageFormatter.Format(AppConst.Messages.MSG_SOURCE_ID_REQUIRED, prefix));
+        else if (!sourceIds.Add(sourceId)) failures.Add(ValidationMessageFormatter.Format(AppConst.Messages.MSG_SOURCE_ID_DUPLICATED, prefix, sourceId));
+        if (source.CompanyId <= 0) failures.Add(ValidationMessageFormatter.Format(AppConst.Messages.MSG_COMPANY_ID_POSITIVE, prefix));
 
         ValidateAbsoluteRootPath(source.RootPath, prefix, failures);
         ValidateTimeZone(source.TimeZoneId, prefix, failures);
@@ -105,13 +114,13 @@ public sealed class RfidRawLogOptionsValidator(IOptions<WorkerOptions> workerOpt
         var value = rootPath.Trim();
         if (value.Length == 0 || !Path.IsPathRooted(value))
         {
-            failures.Add($"{prefix}.RootPath must be an absolute path.");
+            failures.Add(ValidationMessageFormatter.Format(AppConst.Messages.MSG_ROOT_PATH_ABSOLUTE, prefix));
             return;
         }
 
         if (ContainsParentDirectorySegment(value))
         {
-            failures.Add($"{prefix}.RootPath cannot contain a parent-directory segment ('..').");
+            failures.Add(ValidationMessageFormatter.Format(AppConst.Messages.MSG_ROOT_PATH_NO_PARENT_DIRECTORY, prefix));
         }
 
         try
@@ -120,7 +129,7 @@ public sealed class RfidRawLogOptionsValidator(IOptions<WorkerOptions> workerOpt
         }
         catch (Exception exception) when (exception is ArgumentException or NotSupportedException)
         {
-            failures.Add($"{prefix}.RootPath is not a valid path.");
+            failures.Add(ValidationMessageFormatter.Format(AppConst.Messages.MSG_ROOT_PATH_INVALID, prefix));
         }
     }
 
@@ -128,7 +137,7 @@ public sealed class RfidRawLogOptionsValidator(IOptions<WorkerOptions> workerOpt
     {
         if (string.IsNullOrWhiteSpace(timeZoneId))
         {
-            failures.Add($"{prefix}.TimeZoneId is required.");
+            failures.Add(ValidationMessageFormatter.Format(AppConst.Messages.MSG_TIME_ZONE_REQUIRED, prefix));
             return;
         }
 
@@ -138,11 +147,11 @@ public sealed class RfidRawLogOptionsValidator(IOptions<WorkerOptions> workerOpt
         }
         catch (TimeZoneNotFoundException)
         {
-            failures.Add($"{prefix}.TimeZoneId '{timeZoneId}' was not found on this system.");
+            failures.Add(ValidationMessageFormatter.Format(AppConst.Messages.MSG_TIME_ZONE_NOT_FOUND, prefix, timeZoneId));
         }
         catch (InvalidTimeZoneException)
         {
-            failures.Add($"{prefix}.TimeZoneId '{timeZoneId}' is invalid.");
+            failures.Add(ValidationMessageFormatter.Format(AppConst.Messages.MSG_TIME_ZONE_INVALID, prefix, timeZoneId));
         }
     }
 
@@ -151,18 +160,18 @@ public sealed class RfidRawLogOptionsValidator(IOptions<WorkerOptions> workerOpt
         var value = filePattern.Trim();
         if (!FilePatternRegex.IsMatch(value) || ContainsParentDirectorySegment(value))
         {
-            failures.Add($"{prefix}.FilePattern must be a safe File_*.txt file-name pattern without path traversal.");
+            failures.Add(ValidationMessageFormatter.Format(AppConst.Messages.MSG_FILE_PATTERN_SAFE, prefix, AppConst.RawLog.DefaultFilePattern));
         }
     }
 
     private static void ValidatePolicy(FileStartPositionPolicy policy, string propertyName, ICollection<string> failures)
     {
-        if (!Enum.IsDefined(policy)) failures.Add($"{propertyName} has an unsupported value.");
+        if (!Enum.IsDefined(policy)) failures.Add(ValidationMessageFormatter.Format(AppConst.Messages.MSG_POLICY_UNSUPPORTED, propertyName));
     }
 
     private static bool ContainsParentDirectorySegment(string value) =>
         value.Replace('\\', '/').Split('/', StringSplitOptions.RemoveEmptyEntries)
-            .Any(segment => segment == "..");
+            .Any(segment => segment == AppConst.Path.ParentDirectorySegment);
 }
 
 public sealed class MongoDbOptionsValidator(IOptions<WorkerOptions> workerOptions)
@@ -178,7 +187,7 @@ public sealed class MongoDbOptionsValidator(IOptions<WorkerOptions> workerOption
         var failures = new List<string>();
         if (string.IsNullOrWhiteSpace(options.ConnectionString))
         {
-            failures.Add("ConnectionString is required through configuration or the configured environment variable.");
+            failures.Add(AppConst.Messages.MSG_CONNECTION_STRING_REQUIRED);
         }
 
         ValidateDatabaseName(options.DatabaseName, nameof(options.DatabaseName), failures);
@@ -193,15 +202,15 @@ public sealed class MongoDbOptionsValidator(IOptions<WorkerOptions> workerOption
     {
         if (string.IsNullOrWhiteSpace(value) || value.Any(character => character is '/' or '\\' or '.' or '"' or '$' or '\0'))
         {
-            failures.Add($"{propertyName} contains invalid MongoDB database-name characters.");
+            failures.Add(ValidationMessageFormatter.Format(AppConst.Messages.MSG_MONGO_DATABASE_NAME_INVALID, propertyName));
         }
     }
 
     private static void ValidateCollectionName(string value, string propertyName, ICollection<string> failures)
     {
-        if (string.IsNullOrWhiteSpace(value) || value.Length > 120 || value.Contains('\0') || value.StartsWith("system.", StringComparison.Ordinal))
+        if (string.IsNullOrWhiteSpace(value) || value.Length > AppConst.MongoDb.MaxCollectionNameLength || value.Contains('\0') || value.StartsWith(AppConst.MongoDb.SystemCollectionPrefix, StringComparison.Ordinal))
         {
-            failures.Add($"{propertyName} is not a valid MongoDB collection name.");
+            failures.Add(ValidationMessageFormatter.Format(AppConst.Messages.MSG_MONGO_COLLECTION_NAME_INVALID, propertyName));
         }
     }
 }
