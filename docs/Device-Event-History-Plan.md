@@ -33,7 +33,7 @@ Team được phép triển khai trước một vertical slice nhỏ để test 
 ### Contract cố định cho Phase 1A
 
 - `SourceId` và `CompanyId` nằm trong cấu hình cục bộ của Worker.
-- Phase 1A đọc local folder trên cùng máy trước.
+- Phase 1A ưu tiên local folder; implementation hiện tại đã có thêm adapter remote HTTP directory listing + HTTP Range để phục vụ môi trường giả lập server remote.
 - `RootPath` được thiết kế đủ tổng quát để sau này nhận Windows UNC share, ví dụ `\\RFID-SERVER\\RawData`.
 - Ngày của record lấy từ folder `yyyy/MM/dd`; giờ lấy từ raw record và diễn giải theo timezone Việt Nam (`SE Asia Standard Time`). Không dùng file creation time/last-write time làm thời gian nghiệp vụ.
 - File đã tồn tại tại thời điểm Worker khởi động lần đầu dùng `StartupExistingFilePolicy = End` để bỏ qua lịch sử cũ.
@@ -45,13 +45,29 @@ Team được phép triển khai trước một vertical slice nhỏ để test 
 
 Các nội dung sau được triển khai sau khi vertical slice đầu tiên chạy được:
 
-- remote Windows share và preflight kiểm tra server/share/quyền đọc;
+- remote Windows share và preflight kiểm tra server/share/quyền đọc vẫn chưa nằm trong implementation; remote hiện tại là HTTP adapter;
 - nhiều source hoặc nhiều công ty trong cùng một Worker;
 - parser mở rộng cho toàn bộ block và numeric code chưa xác nhận;
 - metrics/exporter/health nâng cao;
 - Windows Service/container packaging và UAT production.
 
 Phase 1A vẫn bắt buộc giữ các nguyên tắc correctness: byte offset, terminator `e(0)`, partial record không advance, deterministic identity, persistence trước checkpoint và restart không tạo duplicate.
+
+### Trạng thái implementation đối chiếu ngày 2026-08-26
+
+| Phạm vi | Trạng thái trong checkout hiện tại |
+|---|---|
+| WP1 - solution foundation | Đã có |
+| WP2 - configuration/identity/validation | Đã có |
+| WP3 - discovery/tail/framing | Đã có; local và remote HTTP |
+| WP4 - parser/canonical mapping | Đã có cho các block hiện đang được hỗ trợ |
+| WP5 - MongoDB/index/checkpoint | Đã có |
+| WP6 - orchestration/scheduling/recovery | Đã có; gồm non-blocking requeue khi bounded queue đầy |
+| WP7 - observability/health | Đã có abstraction, metrics và health checks; chưa có HTTP endpoint/exporter |
+| WP8 - test suite | Có baseline Unit/Integration/Architecture; cần tiếp tục mở rộng failure/UAT matrix |
+| WP9 - packaging/UAT/operations | Chưa hoàn tất |
+
+Bảng này mô tả implementation hiện tại, không thay thế acceptance production. Chi tiết class/hàm thực tế nằm trong `Device-Event-History-Current-Codebase.md`.
 
 ## 2. Ranh giới Sprint
 
@@ -324,10 +340,10 @@ Worker/appsettings.json
 | Component | Vai trò |
 |---|---|
 | `RawLogFileDiscovery` | Tìm date folder và file theo poll |
-| `RawLogPathParser` | Parse folder date và FileId |
+| `LocalRawLogFileDiscovery` / `RemoteHttpRawLogFileDiscovery` | Enumerate filesystem hoặc parse HTTP directory listing |
 | `RawLogTailReader` | Đọc byte từ checkpoint offset |
-| `RawRecordFramer` | Chia byte stream theo `e(0)` |
-| `FileReadSession` | Giữ state đọc của một file trong một poll/session |
+| `RawLogRecordFramer` | Chia byte stream theo `e(0)` |
+| `FileTurnProcessor` | Giới hạn một turn theo byte/record/time và tạo processing result |
 | `FileRegistry` | Dedupe runtime state và per-file processing owner |
 | `FairFileScheduler` | Chia lượt đọc theo byte/record/time budget |
 
@@ -362,15 +378,13 @@ RawFileRecord
    - file tạm unavailable.
 10. Detect `fileLength < checkpoint.position` và trả anomaly; không tự reset.
 11. File còn backlog được requeue; file caught-up chờ poll, không chiếm consumer liên tục.
-12. Actual file discovery dựa trên filesystem; danh sách DB/`ExpectedFileIds` chỉ dùng để health/reconciliation.
+12. Actual file discovery dựa trên filesystem; model hiện tại chưa có `ExpectedFileIds`, nên expected inventory là extension point cho health/reconciliation sau này.
 
 ### File chính
 
 ```text
-Infrastructure/RfidRawLog/Discovery/*.cs
-Infrastructure/RfidRawLog/Reading/*.cs
-Application/Ingestion/RawFileRecord.cs
-Domain/Sources/*.cs
+src/DeviceEventHistory.Infrastructure/RfidRawLog/{Discovery,Reading,Framing}/*.cs
+src/DeviceEventHistory.Worker/Orchestration/{FileRegistry,FileTurnProcessor,FairFileScheduler}.cs
 ```
 
 ### Kết quả mong đợi
@@ -401,14 +415,9 @@ Chuyển complete raw record thành canonical history hoặc data failure, đồ
 | Component | Vai trò |
 |---|---|
 | `BlockTokenizer` | Tách block name/raw arguments |
-| `HeaderBlockParser` | Parse `@(...)` |
-| `GateStateBlockParser` | Parse `b(...)` |
-| `SignalBlockParser` | Parse `t(...)` |
-| `BusinessEventBlockParser` | Parse `te(...)` |
-| `StyleProcessBlockParser` | Parse `sp(...)` |
-| `UserBlockParser` | Parse `u(...)` |
 | `RfidRawRecordParser` | Điều phối tolerant parsing |
-| `ProcessRawFileRecordHandler` | Map canonical event/failure |
+| `CanonicalDeviceEventMapper` | Map canonical event/failure |
+| `ProcessRawFileRecordHandler` | Gọi parser rồi mapper cho complete record |
 | `EventIdentityFactory` | Tạo eventId/failureId deterministic |
 
 ### Công việc
@@ -433,12 +442,9 @@ Chuyển complete raw record thành canonical history hoặc data failure, đồ
 ### File chính
 
 ```text
-Infrastructure/RfidRawLog/Parsing/*.cs
-Application/Parsing/*.cs
-Application/Ingestion/ProcessRawFileRecordHandler.cs
-Application/Ingestion/EventIdentityFactory.cs
-Domain/Events/*.cs
-Domain/Failures/*.cs
+src/DeviceEventHistory.Infrastructure/RfidRawLog/Parsing/*.cs
+src/DeviceEventHistory.Application/Parsing/*.cs
+src/DeviceEventHistory.Domain/Events/CanonicalDeviceEvent.cs
 ```
 
 ### Kết quả mong đợi
@@ -496,12 +502,9 @@ persist history/failure -> confirm -> advance checkpoint
 ### File chính
 
 ```text
-Infrastructure/MongoDb/Documents/*.cs
-Infrastructure/MongoDb/Mapping/*.cs
-Infrastructure/MongoDb/Stores/*.cs
-Infrastructure/MongoDb/Indexes/MongoIndexInitializer.cs
-Application/Abstractions/Persistence/*.cs
-Application/Checkpoints/*.cs
+src/DeviceEventHistory.Infrastructure/MongoDb/{Mapping,Stores,Indexes}/*.cs
+src/DeviceEventHistory.Infrastructure/MongoDb/MongoDbContext.cs
+src/DeviceEventHistory.Application/Persistence/*.cs
 ```
 
 ### Kết quả mong đợi
@@ -564,10 +567,10 @@ validate options
 ### File chính
 
 ```text
-Worker/HostedServices/*.cs
-Worker/Orchestration/*.cs
-Worker/Program.cs
-Infrastructure/DependencyInjection.cs
+src/DeviceEventHistory.Worker/HostedServices/*.cs
+src/DeviceEventHistory.Worker/Orchestration/*.cs
+src/DeviceEventHistory.Worker/Configuration/ServiceCollectionExtensions.cs
+src/DeviceEventHistory.Worker/Program.cs
 ```
 
 ### Kết quả mong đợi
@@ -624,9 +627,9 @@ EventId/FailureId, Attempt, Duration, Result
 ### File chính
 
 ```text
-Infrastructure/Observability/*.cs
-Worker/HealthChecks/*.cs
-Worker/Configuration/ConfigurationRedactor.cs
+src/DeviceEventHistory.Infrastructure/Observability/*.cs
+src/DeviceEventHistory.Worker/HealthChecks/*.cs
+src/DeviceEventHistory.Worker/Configuration/ConfigurationRedactor.cs
 ```
 
 ### Kết quả mong đợi

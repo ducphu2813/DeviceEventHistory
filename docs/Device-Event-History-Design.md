@@ -2,7 +2,7 @@
 
 ## 1. Trạng thái và phạm vi tài liệu
 
-- Trạng thái: thiết kế đề xuất, cần runtime discovery và PoC trước khi production.
+- Trạng thái: raw-log ingestion đã được triển khai trong Sprint 1; phần AppHub/direct transport vẫn là thiết kế cho giai đoạn sau và chưa thuộc Worker hiện tại.
 - Ngày khảo sát source: 2026-08-24.
 - Phạm vi source RFID: `D:\texpo\server-phan-tich\G-ERP`.
 - Phạm vi source ERP được đọc qua SSH ở chế độ chỉ đọc: `D:\hung-nt\Code\UA\CORE-ERP\Backend`.
@@ -38,7 +38,7 @@ Vì vậy, phương án đề xuất là **hybrid theo event family**:
 
 ### 3.1. Luồng 1 - raw-log ingestion
 
-Chiến thuật discovery, tail nhiều file, `e(0)` framing, fairness và checkpoint của luồng này được chốt trong `Logs-Reading-Strategy.md` và `Device-Event-History-Architecture.md`.
+Chiến thuật discovery, tail nhiều file, `e(0)` framing, fairness và checkpoint của luồng này đã được hiện thực trong `D:\texpo\logging-worker\device-event-worker`. Tên class/hàm thực tế được mô tả trong `Device-Event-History-Current-Codebase.md`.
 
 ```text
 RFID reader / emulator
@@ -51,13 +51,13 @@ RFID.Antenna
 {FolderRawData}/yyyy/MM/dd/File_{FileId}.txt
         |
         v
-Device Event History File Worker
+DeviceEventHistory.Worker
         |
-        +--> đọc record hoàn chỉnh
-        +--> parse raw blocks
-        +--> resolve tenant/device
-        +--> persist history hoặc failure
-        +--> commit checkpoint sau persistence
+        +--> SourcePollingCoordinator / FairFileScheduler
+        +--> FileTurnProcessor / RawLogTailReader / RawLogRecordFramer
+        +--> RfidRawRecordParser / CanonicalDeviceEventMapper
+        +--> RawRecordPersistenceCoordinator
+        +--> Mongo stores / checkpoint sau persistence
         v
 MongoDB
 ```

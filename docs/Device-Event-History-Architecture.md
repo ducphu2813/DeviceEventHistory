@@ -2,13 +2,20 @@
 
 ## 1. Trạng thái tài liệu
 
-- Trạng thái: kiến trúc triển khai cho Phase 1 - Sprint 1.
+- Trạng thái: kiến trúc đối chiếu với implementation hiện tại ngày 2026-08-26.
 - Phạm vi: Worker đọc raw-log do `RFID.Antenna` sinh ra và lưu MongoDB.
 - Nền tảng mục tiêu: .NET 10 Worker Service và MongoDB.
 - Schema chuẩn: `2026-08-22-Db-Schema.md`.
 - Thiết kế tổng thể hai luồng: `Device-Event-History-Design.md`.
 - Chiến thuật tail nhiều file: `Logs-Reading-Strategy.md`.
 - Luồng AppHub/SignalR là Phase 1 - Sprint 2, không phải dependency của Sprint 1.
+
+Implementation hiện tại đã có vertical slice raw-log hoàn chỉnh trong checkout
+`D:\texpo\logging-worker\device-event-worker`: configuration validation,
+local/remote HTTP discovery, tail/framing, parser/canonical mapping, MongoDB
+history/failure/checkpoint, fair scheduling, recovery và observability cơ bản.
+Các tên class/file trong các blueprint cũ bên dưới chỉ còn là khái niệm; tên
+thực tế phải tra theo `Device-Event-History-Current-Codebase.md`.
 
 Tài liệu này là source of truth cho:
 
@@ -19,7 +26,11 @@ Tài liệu này là source of truth cho:
 
 Canonical MongoDB field, index và document contract tiếp tục lấy từ schema chuẩn. Khi có khác biệt, schema chuẩn quyết định document shape; tài liệu này quyết định processing flow và source-code organization.
 
-Sprint 1 bổ sung nhu cầu `sourceId` để phân biệt nhiều Antenna installation có cùng `FileId` và ngày. Trước khi code Mongo mapper, WP0 phải đồng bộ field này vào schema chuẩn hoặc chốt hệ thống chỉ có một source với một giá trị `sourceId` cố định. Không được âm thầm triển khai document shape khác schema.
+Sprint 1 đã bổ sung `sourceId` vào source context và checkpoint key để phân biệt nhiều
+Antenna installation có cùng `FileId` và ngày. Mongo mapper hiện tại lưu
+`source.sourceId`, `source.folderDate`, `source.fileId`, `source.relativePath` và
+offsets theo schema V1; mọi thay đổi document shape vẫn phải cập nhật schema chuẩn
+trước khi sửa mapper.
 
 ## 2. Mục tiêu Sprint 1
 
@@ -214,30 +225,14 @@ Quy tắc bắt buộc:
 
 Sprint 1 giữ một project Infrastructure, nhưng chia namespace/folder rõ ràng giữa `RfidRawLog`, `MongoDb`, `Metadata` và `Observability`. Việc tách thành package/project riêng chỉ thực hiện khi Sprint 2 bổ sung AppHub adapter hoặc khi deployment/package coupling chứng minh cần thiết.
 
-## 7. Cấu trúc thư mục và file đề xuất
+## 7. Cấu trúc solution và file thực tế
 
 ### 7.1. Domain
 
 ```text
 src/DeviceEventHistory.Domain/
-|-- Events/
-|   |-- DeviceEvent.cs
-|   |-- EventCategory.cs
-|   |-- EventSourceKind.cs
-|   |-- EventSource.cs
-|   |-- DeviceContext.cs
-|   |-- RawPayload.cs
-|   |-- ParsedFacts.cs
-|   `-- ParseResult.cs
-|-- Failures/
-|   |-- IngestionFailure.cs
-|   `-- IngestionFailureCode.cs
-|-- Sources/
-|   |-- SourceFileKey.cs
-|   `-- SourceOffsetRange.cs
-`-- Common/
-    |-- DomainValidationException.cs
-    `-- UtcTimestamp.cs
+|-- Events/CanonicalDeviceEvent.cs
+`-- Common/AppConst.cs
 ```
 
 Trách nhiệm:
@@ -251,36 +246,10 @@ Trách nhiệm:
 
 ```text
 src/DeviceEventHistory.Application/
-|-- Ingestion/
-|   |-- RawFileRecord.cs
-|   |-- RawFileRecordContext.cs
-|   |-- ProcessRawFileRecordHandler.cs
-|   |-- ProcessRawFileRecordResult.cs
-|   `-- EventIdentityFactory.cs
-|-- Checkpoints/
-|   |-- IngestionCheckpoint.cs
-|   |-- AdvanceCheckpointCommand.cs
-|   `-- CheckpointDecision.cs
-|-- Parsing/
-|   |-- ParsedRfidRecord.cs
-|   `-- IRfidRawRecordParser.cs
-|-- Metadata/
-|   |-- SourceDefinition.cs
-|   |-- DeviceResolution.cs
-|   `-- IDeviceMetadataResolver.cs
-|-- Abstractions/
-|   |-- Files/
-|   |   |-- IRawLogSourceReader.cs
-|   |   `-- IRawLogDiscovery.cs
-|   |-- Persistence/
-|   |   |-- IDeviceEventHistoryWriter.cs
-|   |   |-- IIngestionFailureWriter.cs
-|   |   `-- IIngestionCheckpointStore.cs
-|   |-- Observability/
-|   |   `-- IIngestionTelemetry.cs
-|   `-- Time/
-|       `-- IClock.cs
-`-- DependencyInjection.cs
+|-- Metadata/{SourceDefinition,RawLogSourceMode,IDeviceMetadataResolver}.cs
+|-- Observability/{IIngestionTelemetry,NullIngestionTelemetry}.cs
+|-- Parsing/*.cs
+`-- Persistence/*.cs
 ```
 
 Trách nhiệm:
@@ -295,83 +264,21 @@ Trách nhiệm:
 
 ```text
 src/DeviceEventHistory.Infrastructure/
-|-- RfidRawLog/
-|   |-- Configuration/
-|   |   |-- RfidRawLogOptions.cs
-|   |   |-- AntennaSourceOptions.cs
-|   |   `-- RfidRawLogOptionsValidator.cs
-|   |-- Discovery/
-|   |   |-- RawLogFileDiscovery.cs
-|   |   |-- RawLogPathParser.cs
-|   |   `-- DiscoveredRawLogFile.cs
-|   |-- Reading/
-|   |   |-- RawLogTailReader.cs
-|   |   |-- RawRecordFramer.cs
-|   |   |-- RawReadChunk.cs
-|   |   `-- FileReadSession.cs
-|   |-- Parsing/
-|   |   |-- RfidRawRecordParser.cs
-|   |   |-- BlockTokenizer.cs
-|   |   |-- HeaderBlockParser.cs
-|   |   |-- GateStateBlockParser.cs
-|   |   |-- SignalBlockParser.cs
-|   |   |-- BusinessEventBlockParser.cs
-|   |   |-- StyleProcessBlockParser.cs
-|   |   `-- UserBlockParser.cs
-|   `-- RfidRawLogServiceCollectionExtensions.cs
-|
-|-- MongoDb/
-|   |-- Configuration/
-|   |   |-- MongoDbOptions.cs
-|   |   `-- MongoDbOptionsValidator.cs
-|   |-- Documents/
-|   |   |-- DeviceEventDocument.cs
-|   |   |-- IngestionFailureDocument.cs
-|   |   `-- IngestionCheckpointDocument.cs
-|   |-- Mapping/
-|   |   |-- DeviceEventDocumentMapper.cs
-|   |   |-- IngestionFailureDocumentMapper.cs
-|   |   `-- IngestionCheckpointMapper.cs
-|   |-- Stores/
-|   |   |-- MongoDeviceEventHistoryWriter.cs
-|   |   |-- MongoIngestionFailureWriter.cs
-|   |   `-- MongoIngestionCheckpointStore.cs
-|   |-- Indexes/
-|   |   `-- MongoIndexInitializer.cs
-|   `-- MongoDbServiceCollectionExtensions.cs
-|
-|-- Metadata/
-|   `-- ConfigurationDeviceMetadataResolver.cs
-|-- Observability/
-|   |-- IngestionMetrics.cs
-|   |-- IngestionHealthState.cs
-|   `-- LoggingScopes.cs
-`-- DependencyInjection.cs
+|-- Metadata/ConfigurationDeviceMetadataResolver.cs
+|-- MongoDb/{Configuration,Execution,Indexes,Mapping,Stores}/*.cs
+|-- Observability/{IngestionHealthState,IngestionMetrics,LoggingScopes}.cs
+`-- RfidRawLog/{Configuration,Discovery,Framing,Parsing,Reading}/*.cs
 ```
 
 ### 7.4. Worker composition root
 
 ```text
 src/DeviceEventHistory.Worker/
-|-- HostedServices/
-|   |-- RawLogIngestionHostedService.cs
-|   `-- StartupInitializationHostedService.cs
-|-- Orchestration/
-|   |-- SourcePollingCoordinator.cs
-|   |-- FileRegistry.cs
-|   |-- FairFileScheduler.cs
-|   `-- GracefulShutdownCoordinator.cs
-|-- Configuration/
-|   |-- WorkerOptions.cs
-|   |-- WorkerOptionsValidator.cs
-|   `-- ConfigurationRedactor.cs
-|-- HealthChecks/
-|   |-- SourcePathHealthCheck.cs
-|   |-- MongoDbHealthCheck.cs
-|   `-- IngestionProgressHealthCheck.cs
-|-- Program.cs
-|-- appsettings.json
-`-- appsettings.Development.json
+|-- Configuration/{WorkerOptions,IngestionOptions,ObservabilityOptions,OptionsValidators,ServiceCollectionExtensions,ConfigurationRedactor}.cs
+|-- HostedServices/{StartupInitializationHostedService}.cs
+|-- HealthChecks/*.cs
+|-- Orchestration/{RawLogIngestionHostedService,SourcePollingCoordinator,FairFileScheduler,FileTurnProcessor,FileRegistry,GracefulShutdownCoordinator}.cs
+`-- Program.cs
 ```
 
 Worker chỉ làm composition/orchestration. Logic framing, parsing và persistence không viết trực tiếp trong `BackgroundService.ExecuteAsync()`.
@@ -394,7 +301,8 @@ Ví dụ cấu hình không chứa secret:
       "MaxBytesPerTurn": 2097152,
       "MaxRecordsPerTurn": 1000,
       "MaxTurnDuration": "00:00:00.250",
-      "StartPositionPolicy": "Beginning",
+          "StartupExistingFilePolicy": "End",
+          "NewFilePolicy": "Beginning",
       "OnFileTruncated": "StopAndAlert",
       "Sources": [
         {

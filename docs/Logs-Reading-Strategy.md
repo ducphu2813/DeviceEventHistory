@@ -1,5 +1,7 @@
 # Device Event History - Chiến thuật đọc raw-log liên tục
 
+> Trạng thái implementation (2026-08-26): chiến thuật dưới đây đã được triển khai trong `D:\texpo\logging-worker\device-event-worker`. Khi tên component trong các mục cũ khác với source, dùng bảng ánh xạ ở mục 19 và `Device-Event-History-Current-Codebase.md` làm chuẩn.
+
 ## 1. Mục đích
 
 Tài liệu này chốt chiến thuật để `DeviceEventHistory.Worker` đọc liên tục các raw-log do `RFID.Antenna` append vào nhiều file theo ngày.
@@ -241,7 +243,7 @@ Nó không quyết định byte position và không thay thế filesystem discov
 
 Sprint 1 có hai lựa chọn:
 
-1. Cấu hình `ExpectedFileIds` theo environment nếu cần cảnh báo.
+1. Nếu tương lai cần expected inventory, bổ sung option riêng; model hiện tại không có `ExpectedFileIds` và discovery luôn dựa trên file thực tế.
 2. Bổ sung read-only `IRawDataFileCatalog` sau vertical slice nếu thật sự cần DB reconciliation.
 
 Không để DB catalog failure chặn việc đọc một file đang tồn tại nếu `SourceId`/`CompanyId` đã được cấu hình an toàn.
@@ -672,25 +674,24 @@ Khi Mongo chậm:
 
 Nếu dùng bounded channel, channel nên chứa **file work item** hoặc batch nhỏ, không chứa toàn bộ nội dung của mọi file.
 
-## 18. Configuration đề xuất
+## 18. Configuration hiện tại
 
 ```json
 {
-  "RawLog": {
-    "DiscoveryInterval": "00:00:15",
-    "CaughtUpPollInterval": "00:00:01",
-    "ErrorRetryMinDelay": "00:00:01",
-    "ErrorRetryMaxDelay": "00:01:00",
+  "DeviceEventHistory": {
+    "Enabled": true,
+    "WorkerId": "device-event-history-worker-01",
+    "RawLog": {
+    "PollInterval": "00:00:02",
     "ReadBufferBytes": 524288,
     "MaxRecordBytes": 1048576,
     "MaxBytesPerTurn": 2097152,
     "MaxRecordsPerTurn": 1000,
-    "MaxDurationPerTurn": "00:00:00.250",
+    "MaxTurnDuration": "00:00:00.250",
     "MaxConcurrentFiles": 4,
     "LookbackDays": 1,
-    "OldDayStablePeriod": "00:10:00",
-    "StartPositionPolicy": "Beginning",
-    "OnFileTruncated": "StopAndAlert",
+    "StartupExistingFilePolicy": "End",
+    "NewFilePolicy": "Beginning",
     "Sources": [
       {
         "SourceId": "antenna-site-a",
@@ -698,67 +699,63 @@ Nếu dùng bounded channel, channel nên chứa **file work item** hoặc batch
         "CompanyId": 2,
         "TimeZoneId": "SE Asia Standard Time",
         "FilePattern": "File_*.txt",
-        "ExpectedFileIds": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10,
-                            11, 12, 13, 14, 15, 16, 17, 18, 19, 20]
+        "Mode": "Local",
+        "RemoteBaseUrl": "",
+        "Enabled": true
       }
     ]
+  }
   }
 }
 ```
 
-Các giá trị trên là initial defaults để PoC/load test, không phải production tuning đã được xác nhận.
+Các giá trị trên phản ánh shape runtime hiện tại; connection string nằm ở `DatabaseSettings.MongoDb` và không đưa vào tài liệu.
 
-`ExpectedFileIds` là tùy chọn cho health/reconciliation; actual discovery vẫn dựa trên files tồn tại.
+Model hiện tại chưa có `ExpectedFileIds`; actual discovery luôn dựa trên files tồn tại. Expected inventory là extension point cho health/reconciliation sau này.
 
 ## 19. Component design
 
 ```text
-RawLogDiscoveryService
-    -> phát hiện SourceFileKey/path
+RawLogFileDiscovery
+    -> discover qua LocalRawLogFileDiscovery hoặc RemoteHttpRawLogFileDiscovery
 
 FileRegistry
     -> giữ runtime state và per-file lock
 
 FairFileScheduler
-    -> bounded queue + turn budget
+    -> bounded Channel + consumer + turn budget
 
 RawLogTailReader
     -> đọc bytes từ checkpoint position
 
-RawRecordFramer
-    -> complete records theo e(0)
+FileTurnProcessor
+    -> gọi IRawLogTailReader + IRawLogRecordFramer
 
-RawRecordProcessor
-    -> parse/map/persist history hoặc failure
+ProcessRawFileRecordHandler
+    -> parser.Parse + mapper.Map
 
-CheckpointCoordinator
-    -> CAS advance sau confirmed outcome
+RawRecordPersistenceCoordinator
+    -> history/failure write rồi checkpoint AdvanceAsync
 
-IngestionTelemetry
-    -> logs/metrics/health
+IngestionMetrics / IngestionHealthState / LoggingScopes
+    -> metrics, health và structured logs
 ```
 
 ### File structure liên quan
 
 ```text
-Infrastructure/RfidRawLog/
-|-- Discovery/
-|   |-- RawLogFileDiscovery.cs
-|   |-- RawLogPathParser.cs
-|   `-- DiscoveredRawLogFile.cs
-|-- Reading/
-|   |-- RawLogTailReader.cs
-|   |-- RawRecordFramer.cs
-|   |-- FileReadSession.cs
-|   `-- RawReadChunk.cs
-`-- Configuration/
-    |-- RfidRawLogOptions.cs
-    `-- AntennaSourceOptions.cs
+src/DeviceEventHistory.Infrastructure/RfidRawLog/
+|-- Configuration/{RfidRawLogOptions,AntennaSourceOptions}.cs
+|-- Discovery/{RawLogFileDiscovery,LocalRawLogFileDiscovery,RemoteHttpRawLogFileDiscovery}.cs
+|-- Reading/{RawLogTailReader,LocalRawLogTailReader,RemoteHttpRawLogTailReader}.cs
+|-- Framing/{RawLogRecordFramer,FramedRawLogRecord}.cs
+`-- Parsing/{BlockTokenizer,RfidRawRecordParser}.cs
 
-Worker/Orchestration/
+src/DeviceEventHistory.Worker/Orchestration/
 |-- SourcePollingCoordinator.cs
 |-- FileRegistry.cs
 |-- FairFileScheduler.cs
+|-- FileTurnProcessor.cs
 `-- GracefulShutdownCoordinator.cs
 ```
 
