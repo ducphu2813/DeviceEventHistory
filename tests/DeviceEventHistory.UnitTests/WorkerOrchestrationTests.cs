@@ -10,6 +10,7 @@ using DeviceEventHistory.Infrastructure.RfidRawLog.Framing;
 using DeviceEventHistory.Infrastructure.RfidRawLog.Reading;
 using DeviceEventHistory.Worker.Configuration;
 using DeviceEventHistory.Worker.Orchestration;
+using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 
 namespace DeviceEventHistory.UnitTests;
@@ -104,6 +105,33 @@ public sealed class WorkerOrchestrationTests
     }
 
     [Fact]
+    public async Task Bounded_scheduler_queue_does_not_deadlock_when_polling_wakes_queued_files()
+    {
+        var tailReader = new CountingEmptyTailReader();
+        var processor = CreateProcessor(tailReader, new RecordingPersistenceCoordinator(), maxRecordsPerTurn: 10);
+        var scheduler = new FairFileScheduler(
+            maxConcurrentFiles: 4,
+            queueCapacity: 16,
+            processor,
+            NullLogger<FairFileScheduler>.Instance);
+        var states = Enumerable.Range(1, 20)
+            .Select(fileId => CreateState(0, fileId))
+            .ToArray();
+        using var cancellation = new CancellationTokenSource();
+        var schedulerTask = scheduler.RunAsync(cancellation.Token);
+
+        await Task.WhenAll(states.Select(state => scheduler.ScheduleAsync(state, cancellation.Token)));
+        await Task.WhenAll(states.Select(state => scheduler.ScheduleAsync(state, cancellation.Token)));
+
+        await WaitUntilAsync(
+            () => tailReader.ReadCount >= states.Length,
+            TimeSpan.FromSeconds(5));
+
+        cancellation.Cancel();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(async () => await schedulerTask);
+    }
+
+    [Fact]
     public async Task Truncated_file_stops_the_turn_without_advancing_checkpoint()
     {
         var tailReader = new SequenceTailReader(_ => new RawLogTailReadResult
@@ -147,7 +175,8 @@ public sealed class WorkerOrchestrationTests
 
     private static FileIngestionState CreateState(
         int fileLength,
-        long checkpointPosition = 0)
+        long checkpointPosition = 0,
+        int fileId = 1)
     {
         var descriptor = new RawLogFileDescriptor
         {
@@ -156,10 +185,10 @@ public sealed class WorkerOrchestrationTests
             Mode = RawLogSourceMode.Local,
             TimeZoneId = "UTC",
             FolderDate = new DateOnly(2026, 8, 25),
-            FileId = 1,
-            FileName = "File_1.txt",
-            Location = "D:/raw/File_1.txt",
-            RelativePath = "2026/08/25/File_1.txt",
+            FileId = fileId,
+            FileName = $"File_{fileId}.txt",
+            Location = $"D:/raw/File_{fileId}.txt",
+            RelativePath = $"2026/08/25/File_{fileId}.txt",
             Length = fileLength
         };
         var key = new IngestionCheckpointKey
@@ -183,6 +212,22 @@ public sealed class WorkerOrchestrationTests
             checkpointPosition,
             new RawLogRecordFramer(4096),
             startupExistingFile: false);
+    }
+
+    private static async Task WaitUntilAsync(
+        Func<bool> condition,
+        TimeSpan timeout)
+    {
+        var deadline = DateTime.UtcNow + timeout;
+        while (!condition())
+        {
+            if (DateTime.UtcNow >= deadline)
+            {
+                throw new TimeoutException("The scheduler did not process all queued files in time.");
+            }
+
+            await Task.Delay(10);
+        }
     }
 
     private static RawLogTailReadResult EmptyRead(long offset) => new()
@@ -292,5 +337,22 @@ public sealed class WorkerOrchestrationTests
             CheckpointAdvanceRequest request,
             CancellationToken cancellationToken) =>
             throw new NotSupportedException();
+    }
+
+    private sealed class CountingEmptyTailReader : IRawLogTailReader
+    {
+        private int readCount;
+
+        public int ReadCount => Volatile.Read(ref readCount);
+
+        public async Task<RawLogTailReadResult> ReadAsync(
+            RawLogFileDescriptor file,
+            long offset,
+            CancellationToken cancellationToken = default)
+        {
+            await Task.Delay(10, cancellationToken);
+            Interlocked.Increment(ref readCount);
+            return EmptyRead(offset);
+        }
     }
 }

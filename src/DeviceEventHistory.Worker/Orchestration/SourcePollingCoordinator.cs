@@ -1,4 +1,5 @@
 using DeviceEventHistory.Domain.Common;
+using DeviceEventHistory.Application.Observability;
 using DeviceEventHistory.Infrastructure.RfidRawLog.Configuration;
 using DeviceEventHistory.Infrastructure.RfidRawLog.Discovery;
 using Microsoft.Extensions.Logging;
@@ -11,8 +12,13 @@ public sealed class SourcePollingCoordinator(
     FileRegistry fileRegistry,
     FairFileScheduler scheduler,
     IOptions<RfidRawLogOptions> rawLogOptions,
-    ILogger<SourcePollingCoordinator> logger)
+    ILogger<SourcePollingCoordinator> logger,
+    IIngestionTelemetry? ingestionTelemetry = null)
 {
+    private readonly IIngestionTelemetry telemetry =
+        ingestionTelemetry ?? NullIngestionTelemetry.Instance;
+    private readonly Dictionary<string, int> lastDiscoveredFileCounts = new(StringComparer.Ordinal);
+
     public async Task RunAsync(CancellationToken cancellationToken)
     {
         var startupExistingFile = true;
@@ -33,11 +39,39 @@ public sealed class SourcePollingCoordinator(
                 }
                 catch (Exception exception)
                 {
+                    telemetry.RecordSourceAccessFailure(source.SourceId, source.Mode.ToString());
                     logger.LogWarning(
                         exception,
                         AppConst.Logging.SourceDiscoveryFailedMessage,
                         source.SourceId);
                     continue;
+                }
+
+                telemetry.RecordFilesDiscovered(
+                    source.SourceId,
+                    source.Mode.ToString(),
+                    descriptors.Count);
+
+                var discoveryChanged = !lastDiscoveredFileCounts.TryGetValue(
+                    source.SourceId,
+                    out var previousFileCount) || previousFileCount != descriptors.Count;
+                lastDiscoveredFileCounts[source.SourceId] = descriptors.Count;
+
+                if (discoveryChanged)
+                {
+                    logger.LogDebug(
+                        AppConst.Logging.SourceDiscoveryCompletedMessage,
+                        source.SourceId,
+                        source.Mode,
+                        descriptors.Count);
+                }
+                else
+                {
+                    logger.LogTrace(
+                        AppConst.Logging.SourceDiscoveryCompletedMessage,
+                        source.SourceId,
+                        source.Mode,
+                        descriptors.Count);
                 }
 
                 foreach (var descriptor in descriptors)

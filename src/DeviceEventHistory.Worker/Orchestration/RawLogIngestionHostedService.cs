@@ -1,4 +1,5 @@
 using DeviceEventHistory.Domain.Common;
+using DeviceEventHistory.Infrastructure.Observability;
 using DeviceEventHistory.Worker.Configuration;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -10,6 +11,7 @@ public sealed class RawLogIngestionHostedService(
     SourcePollingCoordinator pollingCoordinator,
     FairFileScheduler scheduler,
     GracefulShutdownCoordinator shutdownCoordinator,
+    IngestionHealthState healthState,
     IOptions<WorkerOptions> workerOptions,
     ILogger<RawLogIngestionHostedService> logger) : BackgroundService
 {
@@ -21,10 +23,18 @@ public sealed class RawLogIngestionHostedService(
             return;
         }
 
+        healthState.MarkLive();
         logger.LogInformation(AppConst.Logging.IngestionStartedMessage);
-        await shutdownCoordinator.RunAsync(
-            pollingCoordinator.RunAsync,
-            scheduler.RunAsync,
-            stoppingToken);
+        try
+        {
+            await shutdownCoordinator.RunAsync(
+                pollingCoordinator.RunAsync,
+                scheduler.RunAsync,
+                stoppingToken);
+        }
+        finally
+        {
+            healthState.MarkStopped();
+        }
     }
 }

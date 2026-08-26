@@ -4,6 +4,7 @@ using DeviceEventHistory.Infrastructure.RfidRawLog.Configuration;
 using DeviceEventHistory.Infrastructure.RfidRawLog.Discovery;
 using DeviceEventHistory.Infrastructure.RfidRawLog.Framing;
 using DeviceEventHistory.Infrastructure.RfidRawLog.Reading;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
 namespace DeviceEventHistory.Worker.Orchestration;
@@ -13,8 +14,11 @@ public sealed class FileRegistry(
     IRawLogTailReader tailReader,
     Func<IRawLogRecordFramer> framerFactory,
     IOptions<RfidRawLogOptions> rawLogOptions,
-    TimeProvider timeProvider)
+    TimeProvider timeProvider,
+    ILogger<FileRegistry>? registryLogger = null)
 {
+    private readonly ILogger<FileRegistry> logger =
+        registryLogger ?? Microsoft.Extensions.Logging.Abstractions.NullLogger<FileRegistry>.Instance;
     private readonly Dictionary<string, FileIngestionState> states = new(StringComparer.Ordinal);
     private readonly object sync = new();
 
@@ -41,6 +45,7 @@ public sealed class FileRegistry(
         }
 
         var checkpoint = await checkpointStore.LoadAsync(key, cancellationToken);
+        var hasPersistedCheckpoint = checkpoint is not null;
         var initialPosition = checkpoint?.Position ??
             await ResolveInitialPositionAsync(descriptor, startupExistingFile, cancellationToken);
 
@@ -58,6 +63,18 @@ public sealed class FileRegistry(
             initialPosition,
             framerFactory(),
             startupExistingFile);
+
+        logger.LogDebug(
+            AppConst.Logging.FileStateCreatedMessage,
+            descriptor.SourceId,
+            descriptor.FileId,
+            initialPosition,
+            startupExistingFile,
+            !hasPersistedCheckpoint
+                ? (startupExistingFile
+                    ? rawLogOptions.Value.StartupExistingFilePolicy
+                    : rawLogOptions.Value.NewFilePolicy)
+                : AppConst.Observability.CheckpointPolicyLabel);
 
         lock (sync)
         {

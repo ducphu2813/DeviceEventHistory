@@ -15,6 +15,7 @@ public static class AppConst
         public const string DatabaseSettingsSection = RootSection + ":DatabaseSettings";
         public const string MongoDbSection = DatabaseSettingsSection + ":MongoDb";
         public const string IngestionSection = RootSection + ":Ingestion";
+        public const string ObservabilitySection = RootSection + ":Observability";
     }
 
     public static class EnvironmentVariables
@@ -43,6 +44,9 @@ public static class AppConst
         public const int PersistenceRetryMaxDelayMilliseconds = 4_000;
         public const int ShutdownTimeoutSeconds = 30;
         public const int MaxRawPayloadBytes = 1024 * 1024;
+        public const int MongoFailureUnhealthyThreshold = 3;
+        public const int SourceFailureUnhealthyThreshold = 3;
+        public const int ProgressStaleMinutes = 5;
     }
 
     public static class RawLog
@@ -129,6 +133,10 @@ public static class AppConst
             "Raw-log ingestion orchestration started.";
         public const string IngestionStoppedMessage =
             "Raw-log ingestion orchestration stopped.";
+        public const string SchedulerStartedMessage =
+            "Raw-log scheduler started with ConsumerCount={ConsumerCount}.";
+        public const string FileTurnStartedMessage =
+            "Raw-log file turn started for SourceId={SourceId}, FileId={FileId}, CheckpointPosition={CheckpointPosition}, ReadOffset={ReadOffset}.";
         public const string SourceDiscoveryFailedMessage =
             "Raw-log source discovery failed for SourceId={SourceId}.";
         public const string FileStateInitializationFailedMessage =
@@ -141,6 +149,20 @@ public static class AppConst
             "Raw-log checkpoint conflict detected for SourceId={SourceId}, FileId={FileId}, FolderDate={FolderDate}.";
         public const string FileTurnStoppedMessage =
             "Raw-log file processing stopped for SourceId={SourceId}, FileId={FileId}, FolderDate={FolderDate}.";
+        public const string SourceDiscoveryCompletedMessage =
+            "Raw-log source discovery completed for SourceId={SourceId}, Mode={Mode}, FileCount={FileCount}.";
+        public const string FileStateCreatedMessage =
+            "Raw-log file state created for SourceId={SourceId}, FileId={FileId}, StartPosition={StartPosition}, StartupExistingFile={StartupExistingFile}, Policy={Policy}.";
+        public const string FileTurnReadMessage =
+            "Raw-log turn read SourceId={SourceId}, FileId={FileId}, Offset={Offset}, BytesRead={BytesRead}, NextOffset={NextOffset}, FileLength={FileLength}, HasMore={HasMore}, PendingBytes={PendingBytes}.";
+        public const string FileTurnCompletedMessage =
+            "Raw-log turn completed for SourceId={SourceId}, FileId={FileId}, Status={Status}, CheckpointPosition={CheckpointPosition}, ReadOffset={ReadOffset}, ReadyRecords={ReadyRecords}, PendingBytes={PendingBytes}.";
+        public const string FileRequeueDeferredMessage =
+            "Raw-log file requeue deferred because the scheduler queue is full for SourceId={SourceId}, FileId={FileId}.";
+        public const string RemoteDirectoryDiscoveredMessage =
+            "Remote raw-log directory discovered for SourceId={SourceId}, FolderDate={FolderDate}, FileCount={FileCount}.";
+        public const string FileRecordProcessedMessage =
+            "Raw-log record processed with Result={Result}, OffsetStart={OffsetStart}, OffsetEnd={OffsetEnd}.";
     }
 
     public static class Messages
@@ -176,6 +198,12 @@ public static class AppConst
             "MaxRecordsPerTurn must be greater than zero.";
         public const string MSG_MAX_TURN_DURATION_POSITIVE =
             "MaxTurnDuration must be greater than zero.";
+        public const string MSG_MONGO_FAILURE_UNHEALTHY_THRESHOLD_POSITIVE =
+            "MongoFailureUnhealthyThreshold must be greater than zero.";
+        public const string MSG_SOURCE_FAILURE_UNHEALTHY_THRESHOLD_POSITIVE =
+            "SourceFailureUnhealthyThreshold must be greater than zero.";
+        public const string MSG_PROGRESS_STALE_AFTER_POSITIVE =
+            "ProgressStaleAfter must be greater than zero.";
         public const string MSG_SOURCES_REQUIRED =
             "At least one raw-log source is required when the Worker is enabled.";
         public const string MSG_SOURCE_ID_REQUIRED =
@@ -263,5 +291,67 @@ public static class AppConst
         public const string InvalidRawBlock = "INVALID_RAW_BLOCK";
         public const string UnknownRawBlock = "UNKNOWN_RAW_BLOCK";
         public const string InvalidSourceTimeZone = "INVALID_SOURCE_TIME_ZONE";
+    }
+
+    public static class Observability
+    {
+        public const string MeterName = "DeviceEventHistory.Ingestion";
+        public const string MeterVersion = RawLog.ParserVersion;
+        public const string MongoHealthCheckName = "mongodb";
+        public const string SourceHealthCheckName = "raw-log-source";
+        public const string IngestionHealthCheckName = "ingestion-progress";
+        public const string HealthStatusReady = "ready";
+        public const string HealthStatusDegraded = "degraded";
+        public const string HealthStatusUnhealthy = "unhealthy";
+        public const string HealthReasonStartupPending = "startup_pending";
+        public const string HealthReasonMongoUnavailable = "mongo_unavailable";
+        public const string HealthReasonSourceUnavailable = "source_unavailable";
+        public const string HealthReasonFileTruncated = "file_truncated";
+        public const string HealthReasonProgressStale = "progress_stale";
+        public const string OperationMongo = "mongodb.operation";
+        public const string OperationHistoryWrite = "history.write";
+        public const string OperationFailureWrite = "failure.write";
+        public const string OperationCheckpointAdvance = "checkpoint.advance";
+        public const string MetricFilesDiscovered = "device_event_history.files.discovered";
+        public const string MetricFilesActive = "device_event_history.files.active";
+        public const string MetricSourceAccessFailures = "device_event_history.source.access_failures";
+        public const string MetricBytesRead = "device_event_history.bytes.read";
+        public const string MetricRecordsFramed = "device_event_history.records.framed";
+        public const string MetricPartialRecords = "device_event_history.records.partial";
+        public const string MetricRecordsParsed = "device_event_history.records.parsed";
+        public const string MetricRecordsParseWarnings = "device_event_history.records.parse_warnings";
+        public const string MetricRecordsParseFailures = "device_event_history.records.parse_failures";
+        public const string MetricHistoryWrites = "device_event_history.history.writes";
+        public const string MetricFailureWrites = "device_event_history.failure.writes";
+        public const string MetricDuplicateIdentities = "device_event_history.persistence.duplicates";
+        public const string MetricCheckpointAdvances = "device_event_history.checkpoint.advances";
+        public const string MetricCheckpointFailures = "device_event_history.checkpoint.failures";
+        public const string MetricMongoRetries = "device_event_history.mongodb.retries";
+        public const string MetricMongoFailures = "device_event_history.mongodb.failures";
+        public const string MetricPersistenceLatency = "device_event_history.persistence.duration";
+        public const string MetricIngestionLagBytes = "device_event_history.ingestion.lag_bytes";
+        public const string MetricOversizedRecords = "device_event_history.records.oversized";
+        public const string MetricTruncatedFiles = "device_event_history.files.truncated";
+        public const string TagSourceId = "source_id";
+        public const string TagMode = "mode";
+        public const string TagFileId = "file_id";
+        public const string TagStatus = "status";
+        public const string TagOperation = "operation";
+        public const string ResultCanceled = "canceled";
+        public const string ResultHistory = "history";
+        public const string ResultFailure = "failure";
+        public const string CheckpointPolicyLabel = "Checkpoint";
+        public const string HealthWorkerDisabledDescription = "Worker is disabled.";
+        public const string HealthMongoUnavailableDescription = "MongoDB is unavailable.";
+        public const string HealthNoSourceDescription =
+            "No enabled raw-log source is configured with a valid root.";
+        public const string HealthNoReadableSourceDescription =
+            "No configured raw-log source is currently readable.";
+        public const string HealthSourceAttentionDescription =
+            "At least one raw-log source requires attention.";
+        public const string HealthIngestionNotLiveDescription =
+            "Ingestion loop is not live.";
+        public const string HealthIngestionStatusDescription =
+            "Ingestion status is {0}; reason={1}.";
     }
 }

@@ -1,13 +1,17 @@
 using DeviceEventHistory.Domain.Common;
+using DeviceEventHistory.Application.Observability;
 using MongoDB.Driver;
 
 namespace DeviceEventHistory.Infrastructure.MongoDb.Execution;
 
-public sealed class MongoRetryPolicy(int retryCount)
+public sealed class MongoRetryPolicy(
+    int retryCount,
+    IIngestionTelemetry? telemetry = null)
 {
     public async Task ExecuteAsync(
         Func<CancellationToken, Task> operation,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        string operationName = AppConst.Observability.OperationMongo)
     {
         await ExecuteAsync(
             async token =>
@@ -15,12 +19,14 @@ public sealed class MongoRetryPolicy(int retryCount)
                 await operation(token);
                 return true;
             },
-            cancellationToken);
+            cancellationToken,
+            operationName);
     }
 
     public async Task<T> ExecuteAsync<T>(
         Func<CancellationToken, Task<T>> operation,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        string operationName = AppConst.Observability.OperationMongo)
     {
         ArgumentNullException.ThrowIfNull(operation);
 
@@ -30,8 +36,15 @@ public sealed class MongoRetryPolicy(int retryCount)
             {
                 return await operation(cancellationToken);
             }
-            catch (Exception exception) when (IsTransient(exception) && attempt < retryCount)
+            catch (Exception exception) when (IsTransient(exception))
             {
+                if (attempt >= retryCount)
+                {
+                    telemetry?.RecordMongoFailure(operationName);
+                    throw;
+                }
+
+                telemetry?.RecordMongoRetry(operationName);
                 var delayMilliseconds = Math.Min(
                     AppConst.Defaults.PersistenceRetryMaxDelayMilliseconds,
                     AppConst.Defaults.PersistenceRetryDelayMilliseconds * (1 << Math.Min(attempt, 4)));

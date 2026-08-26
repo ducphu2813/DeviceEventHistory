@@ -8,6 +8,8 @@ public sealed record RawRecordProcessingResult
 
     public CanonicalIngestionFailure? Failure { get; init; }
 
+    public RawRecordParseStatus? ParseStatus { get; init; }
+
     public sealed record CanonicalIngestionFailure
     {
         public required string FailureId { get; init; }

@@ -52,6 +52,38 @@ public sealed class IngestionOptionsValidator(IOptions<WorkerOptions> workerOpti
     }
 }
 
+public sealed class ObservabilityOptionsValidator(IOptions<WorkerOptions> workerOptions)
+    : IValidateOptions<ObservabilityOptions>
+{
+    public ValidateOptionsResult Validate(string? name, ObservabilityOptions options)
+    {
+        if (!workerOptions.Value.Enabled)
+        {
+            return ValidateOptionsResult.Success;
+        }
+
+        var failures = new List<string>();
+        if (options.MongoFailureUnhealthyThreshold <= 0)
+        {
+            failures.Add(AppConst.Messages.MSG_MONGO_FAILURE_UNHEALTHY_THRESHOLD_POSITIVE);
+        }
+
+        if (options.SourceFailureUnhealthyThreshold <= 0)
+        {
+            failures.Add(AppConst.Messages.MSG_SOURCE_FAILURE_UNHEALTHY_THRESHOLD_POSITIVE);
+        }
+
+        if (options.ProgressStaleAfter <= TimeSpan.Zero)
+        {
+            failures.Add(AppConst.Messages.MSG_PROGRESS_STALE_AFTER_POSITIVE);
+        }
+
+        return failures.Count == 0
+            ? ValidateOptionsResult.Success
+            : ValidateOptionsResult.Fail(failures);
+    }
+}
+
 public sealed class RfidRawLogOptionsValidator(IOptions<WorkerOptions> workerOptions)
     : IValidateOptions<RfidRawLogOptions>
 {

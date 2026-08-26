@@ -86,7 +86,17 @@ Domain <- Application <- Infrastructure <- Worker
 - Raw path môi trường thật chỉ xuất hiện trong diagnostic scope cần thiết; không đưa vào metric label có cardinality cao.
 - Configuration mẫu phải dùng placeholder an toàn và không chứa credential thật.
 
-## 9. Testing
+## 9. Observability
+
+- Structured log scope tối thiểu phải mang `WorkerId`, `SourceId`, `FolderDate`, `FileId`, `RelativePath`, offset và kết quả; `EventId`/`FailureId` chỉ nằm trong log scope, không dùng làm metric label.
+- Metric dùng `System.Diagnostics.Metrics` qua abstraction `IIngestionTelemetry`; exporter/sink được chọn theo môi trường triển khai, không nhúng vendor-specific exporter vào Sprint 1.
+- Metric label chỉ dùng tập có cardinality kiểm soát như `SourceId`, mode, `FileId`, status và operation; không dùng full path, raw payload hoặc identity ID làm label.
+- Metrics phải phân biệt discovered/active files, bytes/records, partial tail, parse status, persistence, duplicate identity, checkpoint, retry, truncation và ingestion lag.
+- Health state phải phân biệt `Ready`, `Degraded` và `Unhealthy`; source không có event mới nhưng vẫn đọc được không được coi là lỗi.
+- Health check Mongo/source/progress không được log secret hoặc raw payload; startup summary chỉ log configuration đã redaction.
+- File truncation, Mongo unavailable kéo dài hoặc checkpoint không tiến triển khi file tăng phải để lại diagnostic state và structured log.
+
+## 10. Testing
 
 - Mỗi rule validation quan trọng phải có unit test cho cả trường hợp hợp lệ và không hợp lệ.
 - Test parser/framer phải bao phủ partial record, nhiều record, UTF-8 boundary và restart.
@@ -94,7 +104,7 @@ Domain <- Application <- Infrastructure <- Worker
 - Mongo integration test có thể opt-in bằng `DEVICE_EVENT_HISTORY_MONGODB_CONNECTION_STRING`; khi chạy local phải xác nhận index initialization, duplicate identity và checkpoint CAS.
 - Không deduplicate business event chỉ vì raw payload giống nhau; idempotency dùng deterministic event identity.
 
-## 10. Quy ước đặt tên
+## 11. Quy ước đặt tên
 
 - Type, method, property và constant dùng PascalCase.
 - Riêng message constant trong `AppConst.Messages` dùng prefix `MSG_` và chữ hoa toàn bộ để dễ nhận diện khi đọc flow xử lý lỗi.
@@ -103,7 +113,7 @@ Domain <- Application <- Infrastructure <- Worker
 - Options kết thúc bằng `Options`; validator kết thúc bằng `Validator`; adapter triển khai interface phải có tên thể hiện technology/source.
 - Một file nên chứa một public type chính, trừ các record/value type nhỏ gắn chặt với type chính.
 
-## 11. Review checklist
+## 12. Review checklist
 
 - Có magic string/number mới cần đưa vào `AppConst` hoặc configuration không?
 - Có dependency đi ngược layer không?

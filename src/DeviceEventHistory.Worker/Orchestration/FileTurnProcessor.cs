@@ -1,4 +1,5 @@
 using DeviceEventHistory.Application.Parsing;
+using DeviceEventHistory.Application.Observability;
 using DeviceEventHistory.Application.Persistence;
 using DeviceEventHistory.Domain.Common;
 using DeviceEventHistory.Infrastructure.RfidRawLog.Framing;
@@ -6,6 +7,8 @@ using DeviceEventHistory.Infrastructure.RfidRawLog.Parsing;
 using DeviceEventHistory.Infrastructure.RfidRawLog.Reading;
 using DeviceEventHistory.Infrastructure.RfidRawLog.Configuration;
 using DeviceEventHistory.Worker.Configuration;
+using DeviceEventHistory.Infrastructure.Observability;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
 namespace DeviceEventHistory.Worker.Orchestration;
@@ -17,8 +20,15 @@ public sealed class FileTurnProcessor(
     IIngestionCheckpointStore checkpointStore,
     IOptions<RfidRawLogOptions> rawLogOptions,
     IOptions<WorkerOptions> workerOptions,
-    TimeProvider timeProvider)
+    TimeProvider timeProvider,
+    IIngestionTelemetry? ingestionTelemetry = null,
+    ILogger<FileTurnProcessor>? recordLogger = null)
 {
+    private readonly IIngestionTelemetry telemetry =
+        ingestionTelemetry ?? NullIngestionTelemetry.Instance;
+    private readonly ILogger<FileTurnProcessor> logger =
+        recordLogger ?? Microsoft.Extensions.Logging.Abstractions.NullLogger<FileTurnProcessor>.Instance;
+
     public async Task<FileTurnResult> ProcessAsync(
         FileIngestionState state,
         CancellationToken cancellationToken)
@@ -51,15 +61,63 @@ public sealed class FileTurnProcessor(
                     cancellationToken);
                 state.SetLastObservedFileLength(read.FileLength);
                 lastReadHadMoreData = read.HasMore;
+                if (read.Data.Length > 0 || read.IsTruncated || read.HasMore || state.HasPendingBytes)
+                {
+                    logger.LogDebug(
+                        AppConst.Logging.FileTurnReadMessage,
+                        state.Descriptor.SourceId,
+                        state.Descriptor.FileId,
+                        state.ReadOffset,
+                        read.Data.Length,
+                        read.NextOffset,
+                        read.FileLength,
+                        read.HasMore,
+                        state.Framer.PendingByteCount);
+                }
+                else
+                {
+                    logger.LogTrace(
+                        AppConst.Logging.FileTurnReadMessage,
+                        state.Descriptor.SourceId,
+                        state.Descriptor.FileId,
+                        state.ReadOffset,
+                        read.Data.Length,
+                        read.NextOffset,
+                        read.FileLength,
+                        read.HasMore,
+                        state.Framer.PendingByteCount);
+                }
 
                 if (read.IsTruncated)
                 {
                     state.ResetToCheckpoint();
+                    telemetry.RecordFileTruncated(
+                        state.Descriptor.SourceId,
+                        state.Descriptor.FileId);
                     return FileTurnResult.Truncated();
                 }
 
+                telemetry.RecordBytesRead(
+                    state.Descriptor.SourceId,
+                    state.Descriptor.FileId,
+                    read.Data.Length);
                 if (read.Data.Length == 0)
                 {
+                    telemetry.RecordProgress(
+                        state.Descriptor.SourceId,
+                        state.Descriptor.FileId,
+                        state.Checkpoint.Position,
+                        read.FileLength,
+                        state.Framer.PendingByteCount,
+                        state.Checkpoint.UpdatedAtUtc);
+                    if (state.HasPendingBytes)
+                    {
+                        telemetry.RecordPartialRecord(
+                            state.Descriptor.SourceId,
+                            state.Descriptor.FileId,
+                            state.Framer.PendingByteCount);
+                    }
+
                     return state.HasPendingBytes
                         ? FileTurnResult.WaitingForMoreData()
                         : FileTurnResult.CaughtUp();
@@ -70,12 +128,33 @@ public sealed class FileTurnProcessor(
 
                 try
                 {
-                    state.EnqueueRecords(
-                        state.Framer.Append(read.Data, read.StartOffset));
+                    var framedRecords = state.Framer.Append(read.Data, read.StartOffset).ToArray();
+                    state.EnqueueRecords(framedRecords);
+                    telemetry.RecordRecordsFramed(
+                        state.Descriptor.SourceId,
+                        state.Descriptor.FileId,
+                        framedRecords.Length);
+                    telemetry.RecordProgress(
+                        state.Descriptor.SourceId,
+                        state.Descriptor.FileId,
+                        state.Checkpoint.Position,
+                        read.FileLength,
+                        state.Framer.PendingByteCount,
+                        state.Checkpoint.UpdatedAtUtc);
+                    if (state.HasPendingBytes)
+                    {
+                        telemetry.RecordPartialRecord(
+                            state.Descriptor.SourceId,
+                            state.Descriptor.FileId,
+                            state.Framer.PendingByteCount);
+                    }
                 }
                 catch (RawLogRecordTooLargeException exception)
                 {
                     state.ResetToCheckpoint();
+                    telemetry.RecordOversizedRecord(
+                        state.Descriptor.SourceId,
+                        state.Descriptor.FileId);
                     return FileTurnResult.Stopped(exception);
                 }
             }
@@ -87,12 +166,36 @@ public sealed class FileTurnProcessor(
                 try
                 {
                     var processingResult = recordHandler.Handle(context);
+                    using var recordScope = LoggingScopes.BeginFileScope(
+                        logger,
+                        workerOptions.Value.WorkerId,
+                        state.Descriptor,
+                        record.StartOffset,
+                        record.EndOffsetExclusive,
+                        processingResult.Event?.EventId,
+                        processingResult.Failure?.FailureId,
+                        result: processingResult.ParseStatus?.ToString());
+                    if (processingResult.ParseStatus.HasValue)
+                    {
+                        telemetry.RecordParseResult(
+                            state.Descriptor.SourceId,
+                            state.Descriptor.FileId,
+                            processingResult.ParseStatus.Value);
+                    }
+
                     persistenceOutcome = await persistenceCoordinator.PersistAsync(
                         processingResult,
                         state.Checkpoint,
                         state.LastObservedFileLength,
                         workerOptions.Value.WorkerId,
                         cancellationToken);
+                    logger.LogDebug(
+                        AppConst.Logging.FileRecordProcessedMessage,
+                        persistenceOutcome.WasFailure
+                            ? AppConst.Observability.ResultFailure
+                            : AppConst.Observability.ResultHistory,
+                        record.StartOffset,
+                        record.EndOffsetExclusive);
                 }
                 catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
                 {
@@ -102,11 +205,21 @@ public sealed class FileTurnProcessor(
                 catch (Exception exception)
                 {
                     state.ResetToCheckpoint();
+                    telemetry.RecordCheckpointAdvance(
+                        state.Descriptor.SourceId,
+                        state.Descriptor.FileId,
+                        record.EndOffsetExclusive,
+                        false);
                     return FileTurnResult.PersistenceFailed(exception);
                 }
 
                 if (!persistenceOutcome.IsConfirmed)
                 {
+                    telemetry.RecordCheckpointAdvance(
+                        state.Descriptor.SourceId,
+                        state.Descriptor.FileId,
+                        record.EndOffsetExclusive,
+                        false);
                     if (persistenceOutcome.CheckpointResult.Status == CheckpointAdvanceStatus.Conflict)
                     {
                         await ReloadCheckpointAsync(state, cancellationToken);
@@ -121,6 +234,18 @@ public sealed class FileTurnProcessor(
                 state.CommitCheckpoint(
                     persistenceOutcome.CheckpointResult.Checkpoint ??
                     throw new InvalidOperationException(AppConst.Messages.MSG_CHECKPOINT_CONFIRMATION_REQUIRED));
+                telemetry.RecordCheckpointAdvance(
+                    state.Descriptor.SourceId,
+                    state.Descriptor.FileId,
+                    record.EndOffsetExclusive,
+                    true);
+                telemetry.RecordProgress(
+                    state.Descriptor.SourceId,
+                    state.Descriptor.FileId,
+                    state.Checkpoint.Position,
+                    state.LastObservedFileLength,
+                    state.Framer.PendingByteCount,
+                    state.Checkpoint.UpdatedAtUtc);
                 recordsProcessedThisTurn++;
                 continue;
             }

@@ -1,12 +1,19 @@
 using System.Globalization;
 
 using DeviceEventHistory.Application.Metadata;
+using DeviceEventHistory.Domain.Common;
 using DeviceEventHistory.Infrastructure.RfidRawLog.Configuration;
+using Microsoft.Extensions.Logging;
 
 namespace DeviceEventHistory.Infrastructure.RfidRawLog.Discovery;
 
-public sealed class RemoteHttpRawLogFileDiscovery(HttpClient httpClient) : IRawLogSourceFileDiscovery
+public sealed class RemoteHttpRawLogFileDiscovery(
+    HttpClient httpClient,
+    ILogger<RemoteHttpRawLogFileDiscovery>? discoveryLogger = null) : IRawLogSourceFileDiscovery
 {
+    private readonly ILogger<RemoteHttpRawLogFileDiscovery> logger =
+        discoveryLogger ?? Microsoft.Extensions.Logging.Abstractions.NullLogger<RemoteHttpRawLogFileDiscovery>.Instance;
+
     public RawLogSourceMode Mode => RawLogSourceMode.RemoteHttp;
 
     public async Task<IReadOnlyList<RawLogFileDescriptor>> DiscoverAsync(
@@ -22,6 +29,11 @@ public sealed class RemoteHttpRawLogFileDiscovery(HttpClient httpClient) : IRawL
 
         if (response.StatusCode == System.Net.HttpStatusCode.NotFound)
         {
+            logger.LogTrace(
+                AppConst.Logging.RemoteDirectoryDiscoveredMessage,
+                source.SourceId,
+                folderDate,
+                0);
             return [];
         }
 
@@ -38,7 +50,13 @@ public sealed class RemoteHttpRawLogFileDiscovery(HttpClient httpClient) : IRawL
             }
         }
 
-        return descriptors.OrderBy(descriptor => descriptor.FileId).ToArray();
+        var result = descriptors.OrderBy(descriptor => descriptor.FileId).ToArray();
+        logger.LogTrace(
+            AppConst.Logging.RemoteDirectoryDiscoveredMessage,
+            source.SourceId,
+            folderDate,
+            result.Length);
+        return result;
     }
 
     private static Uri BuildDateUri(string baseUrl, DateOnly folderDate)

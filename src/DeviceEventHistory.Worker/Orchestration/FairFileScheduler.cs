@@ -1,6 +1,11 @@
 using System.Threading.Channels;
+using System.Collections.Concurrent;
+using DeviceEventHistory.Application.Observability;
 using DeviceEventHistory.Domain.Common;
+using DeviceEventHistory.Infrastructure.Observability;
+using DeviceEventHistory.Worker.Configuration;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 
 namespace DeviceEventHistory.Worker.Orchestration;
 
@@ -8,8 +13,14 @@ public sealed class FairFileScheduler(
     int maxConcurrentFiles,
     int queueCapacity,
     FileTurnProcessor processor,
-    ILogger<FairFileScheduler> logger)
+    ILogger<FairFileScheduler> logger,
+    IIngestionTelemetry? ingestionTelemetry = null,
+    IOptions<WorkerOptions>? workerOptions = null)
 {
+    private readonly IIngestionTelemetry telemetry =
+        ingestionTelemetry ?? NullIngestionTelemetry.Instance;
+    private readonly string workerId = workerOptions?.Value.WorkerId ?? AppConst.Defaults.WorkerId;
+    private readonly ConcurrentDictionary<string, byte> observedFileStates = new(StringComparer.Ordinal);
     private readonly Channel<FileIngestionState> queue = Channel.CreateBounded<FileIngestionState>(
         new BoundedChannelOptions(queueCapacity)
         {
@@ -42,6 +53,10 @@ public sealed class FairFileScheduler(
 
     public async Task RunAsync(CancellationToken cancellationToken)
     {
+        logger.LogInformation(
+            AppConst.Logging.SchedulerStartedMessage,
+            maxConcurrentFiles);
+
         var consumers = Enumerable
             .Range(0, maxConcurrentFiles)
             .Select(_ => ConsumeAsync(cancellationToken))
@@ -61,6 +76,22 @@ public sealed class FairFileScheduler(
             }
 
             state.SetStatus(FileIngestionStateStatus.Processing);
+            if (observedFileStates.TryAdd(state.Key, 0))
+            {
+                logger.LogDebug(
+                    AppConst.Logging.FileTurnStartedMessage,
+                    state.Descriptor.SourceId,
+                    state.Descriptor.FileId,
+                    state.Checkpoint.Position,
+                    state.ReadOffset);
+            }
+            telemetry.RecordFileProcessingStarted(state.Descriptor.SourceId, state.Descriptor.FileId);
+            using var fileScope = LoggingScopes.BeginFileScope(
+                logger,
+                workerId,
+                state.Descriptor,
+                state.Checkpoint.Position,
+                state.ReadOffset);
             FileTurnResult result;
             try
             {
@@ -71,6 +102,10 @@ public sealed class FairFileScheduler(
                 state.ResetToCheckpoint();
                 state.SetStatus(FileIngestionStateStatus.Ready);
                 state.ClearScheduleRequest();
+                telemetry.RecordFileProcessingCompleted(
+                    state.Descriptor.SourceId,
+                    state.Descriptor.FileId,
+                    AppConst.Observability.ResultCanceled);
                 throw;
             }
             catch (Exception exception)
@@ -88,6 +123,37 @@ public sealed class FairFileScheduler(
             }
 
             ApplyResultStatus(state, result);
+            var turnWasIdle = result.Status == FileTurnStatus.CaughtUp &&
+                state.ReadyRecordCount == 0 &&
+                state.Framer.PendingByteCount == 0;
+            if (turnWasIdle)
+            {
+                logger.LogTrace(
+                    AppConst.Logging.FileTurnCompletedMessage,
+                    state.Descriptor.SourceId,
+                    state.Descriptor.FileId,
+                    result.Status,
+                    state.Checkpoint.Position,
+                    state.ReadOffset,
+                    state.ReadyRecordCount,
+                    state.Framer.PendingByteCount);
+            }
+            else
+            {
+                logger.LogDebug(
+                    AppConst.Logging.FileTurnCompletedMessage,
+                    state.Descriptor.SourceId,
+                    state.Descriptor.FileId,
+                    result.Status,
+                    state.Checkpoint.Position,
+                    state.ReadOffset,
+                    state.ReadyRecordCount,
+                    state.Framer.PendingByteCount);
+            }
+            telemetry.RecordFileProcessingCompleted(
+                state.Descriptor.SourceId,
+                state.Descriptor.FileId,
+                result.Status.ToString());
             state.ClearScheduleRequest();
 
             if (result.Status == FileTurnStatus.Truncated)
@@ -129,9 +195,31 @@ public sealed class FairFileScheduler(
 
             if ((result.ShouldRequeue || state.ConsumeWakeRequest()) && !state.IsStopped)
             {
-                await ScheduleAsync(state, cancellationToken);
+                TryScheduleAfterTurn(state);
             }
         }
+    }
+
+    private void TryScheduleAfterTurn(FileIngestionState state)
+    {
+        if (state.IsStopped || !state.TryRequestSchedule())
+        {
+            return;
+        }
+
+        if (queue.Writer.TryWrite(state))
+        {
+            return;
+        }
+
+        // A consumer must not wait for queue capacity while it is responsible
+        // for consuming that same queue. The polling loop will schedule this
+        // ready state again on its next pass when capacity becomes available.
+        state.ClearScheduleRequest();
+        logger.LogTrace(
+            AppConst.Logging.FileRequeueDeferredMessage,
+            state.Descriptor.SourceId,
+            state.Descriptor.FileId);
     }
 
     private static void ApplyResultStatus(FileIngestionState state, FileTurnResult result)

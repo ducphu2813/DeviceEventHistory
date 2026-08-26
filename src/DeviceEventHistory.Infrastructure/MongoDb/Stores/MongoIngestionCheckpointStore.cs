@@ -1,5 +1,8 @@
+using System.Diagnostics;
+
 using DeviceEventHistory.Application.Persistence;
 using DeviceEventHistory.Domain.Common;
+using DeviceEventHistory.Application.Observability;
 using DeviceEventHistory.Infrastructure.MongoDb.Execution;
 using MongoDB.Bson;
 using MongoDB.Driver;
@@ -8,7 +11,8 @@ namespace DeviceEventHistory.Infrastructure.MongoDb.Stores;
 
 public sealed class MongoIngestionCheckpointStore(
     MongoDbContext context,
-    MongoRetryPolicy retryPolicy) : IIngestionCheckpointStore
+    MongoRetryPolicy retryPolicy,
+    IIngestionTelemetry? telemetry = null) : IIngestionCheckpointStore
 {
     public async Task<IngestionCheckpoint?> LoadAsync(
         IngestionCheckpointKey key,
@@ -70,6 +74,7 @@ public sealed class MongoIngestionCheckpointStore(
             .Set("version", expectedVersion + 1);
 
         UpdateResult result;
+        var startedAt = Stopwatch.GetTimestamp();
         try
         {
             result = await retryPolicy.ExecuteAsync(
@@ -82,13 +87,23 @@ public sealed class MongoIngestionCheckpointStore(
         }
         catch (MongoWriteException exception) when (IsDuplicateKey(exception))
         {
+            telemetry?.RecordPersistenceLatency(
+                AppConst.Observability.OperationCheckpointAdvance,
+                Stopwatch.GetElapsedTime(startedAt));
             return new CheckpointAdvanceResult(CheckpointAdvanceStatus.Conflict, null);
         }
 
         if (result.MatchedCount == 0 && result.UpsertedId is null)
         {
+            telemetry?.RecordPersistenceLatency(
+                AppConst.Observability.OperationCheckpointAdvance,
+                Stopwatch.GetElapsedTime(startedAt));
             return new CheckpointAdvanceResult(CheckpointAdvanceStatus.Conflict, null);
         }
+
+        telemetry?.RecordPersistenceLatency(
+            AppConst.Observability.OperationCheckpointAdvance,
+            Stopwatch.GetElapsedTime(startedAt));
 
         var checkpoint = new IngestionCheckpoint
         {

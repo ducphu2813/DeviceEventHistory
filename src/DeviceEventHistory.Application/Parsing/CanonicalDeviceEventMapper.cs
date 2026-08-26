@@ -13,6 +13,7 @@ public sealed class CanonicalDeviceEventMapper : IRawRecordCanonicalMapper
         {
             return new RawRecordProcessingResult
             {
+                ParseStatus = result.Status,
                 Failure = new RawRecordProcessingResult.CanonicalIngestionFailure
                 {
                     FailureId = EventIdentityFactory.CreateFailureId(result.Context),
@@ -38,6 +39,7 @@ public sealed class CanonicalDeviceEventMapper : IRawRecordCanonicalMapper
 
         return new RawRecordProcessingResult
         {
+            ParseStatus = result.Status,
             Event = new CanonicalDeviceEvent
             {
                 EventId = EventIdentityFactory.CreateEventId(result.Context),

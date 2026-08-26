@@ -1,4 +1,7 @@
+using System.Diagnostics;
+
 using DeviceEventHistory.Application.Persistence;
+using DeviceEventHistory.Application.Observability;
 using DeviceEventHistory.Domain.Common;
 using DeviceEventHistory.Infrastructure.MongoDb.Execution;
 using DeviceEventHistory.Infrastructure.MongoDb.Mapping;
@@ -9,7 +12,8 @@ namespace DeviceEventHistory.Infrastructure.MongoDb.Stores;
 
 public sealed class MongoIngestionFailureWriter(
     MongoDbContext context,
-    MongoRetryPolicy retryPolicy) : IIngestionFailureWriter
+    MongoRetryPolicy retryPolicy,
+    IIngestionTelemetry? telemetry = null) : IIngestionFailureWriter
 {
     public async Task<PersistenceWriteResult> WriteAsync(
         RawRecordProcessingResult.CanonicalIngestionFailure failure,
@@ -22,6 +26,7 @@ public sealed class MongoIngestionFailureWriter(
 
         var collection = context.GetCollection(AppConst.MongoDb.FailureCollection);
         var document = IngestionFailureDocumentMapper.ToDocument(failure, receivedAtUtc, workerId);
+        var startedAt = Stopwatch.GetTimestamp();
 
         try
         {
@@ -29,10 +34,16 @@ public sealed class MongoIngestionFailureWriter(
                 token => collection.InsertOneAsync(document, cancellationToken: token),
                 cancellationToken);
 
+            telemetry?.RecordFailureWrite(
+                wasAlreadyPersisted: false,
+                Stopwatch.GetElapsedTime(startedAt));
             return new PersistenceWriteResult(failure.FailureId, false);
         }
         catch (MongoWriteException exception) when (IsDuplicateKey(exception))
         {
+            telemetry?.RecordFailureWrite(
+                wasAlreadyPersisted: true,
+                Stopwatch.GetElapsedTime(startedAt));
             return new PersistenceWriteResult(failure.FailureId, true);
         }
     }

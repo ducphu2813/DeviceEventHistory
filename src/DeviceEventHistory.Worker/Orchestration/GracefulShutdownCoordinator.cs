@@ -16,9 +16,14 @@ public sealed class GracefulShutdownCoordinator(
 
         try
         {
+            // Start the scheduler first so its consumers are ready before the
+            // polling loop begins filling the bounded work queue.
+            var schedulingTask = schedulingLoop(stoppingToken);
+            var pollingTask = pollingLoop(stoppingToken);
+
             await Task.WhenAll(
-                pollingLoop(stoppingToken),
-                schedulingLoop(stoppingToken));
+                schedulingTask,
+                pollingTask);
         }
         catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
         {
