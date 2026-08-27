@@ -2,7 +2,6 @@ using DeviceEventHistory.Domain.Common;
 using DeviceEventHistory.Application.Observability;
 using DeviceEventHistory.Infrastructure.RfidRawLog.Configuration;
 using DeviceEventHistory.Infrastructure.RfidRawLog.Discovery;
-using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
 namespace DeviceEventHistory.Worker.Orchestration;

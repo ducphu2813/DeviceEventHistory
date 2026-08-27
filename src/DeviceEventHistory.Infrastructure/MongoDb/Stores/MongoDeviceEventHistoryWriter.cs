@@ -1,12 +1,10 @@
 using System.Diagnostics;
-
 using DeviceEventHistory.Application.Persistence;
 using DeviceEventHistory.Application.Observability;
 using DeviceEventHistory.Domain.Common;
 using DeviceEventHistory.Domain.Events;
 using DeviceEventHistory.Infrastructure.MongoDb.Execution;
 using DeviceEventHistory.Infrastructure.MongoDb.Mapping;
-using MongoDB.Bson;
 using MongoDB.Driver;
 
 namespace DeviceEventHistory.Infrastructure.MongoDb.Stores;

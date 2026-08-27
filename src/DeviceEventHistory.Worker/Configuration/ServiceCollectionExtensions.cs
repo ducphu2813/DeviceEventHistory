@@ -18,9 +18,6 @@ using DeviceEventHistory.Infrastructure.RfidRawLog.Parsing;
 using DeviceEventHistory.Worker.Orchestration;
 using DeviceEventHistory.Worker.HostedServices;
 using DeviceEventHistory.Worker.HealthChecks;
-using Microsoft.Extensions.Configuration;
-using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
 
 namespace DeviceEventHistory.Worker.Configuration;

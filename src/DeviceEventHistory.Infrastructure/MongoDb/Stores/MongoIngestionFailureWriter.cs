@@ -1,5 +1,4 @@
 using System.Diagnostics;
-
 using DeviceEventHistory.Application.Persistence;
 using DeviceEventHistory.Application.Observability;
 using DeviceEventHistory.Domain.Common;

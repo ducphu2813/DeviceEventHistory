@@ -8,7 +8,6 @@ using DeviceEventHistory.Infrastructure.RfidRawLog.Reading;
 using DeviceEventHistory.Infrastructure.RfidRawLog.Configuration;
 using DeviceEventHistory.Worker.Configuration;
 using DeviceEventHistory.Infrastructure.Observability;
-using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
 namespace DeviceEventHistory.Worker.Orchestration;
@@ -46,12 +45,7 @@ public sealed class FileTurnProcessor(
         var recordsProcessedThisTurn = 0;
         var lastReadHadMoreData = false;
 
-        while (HasBudget(
-            startedAt,
-            bytesReadThisTurn,
-            recordsProcessedThisTurn,
-            options,
-            timeProvider))
+        while (HasBudget(startedAt, bytesReadThisTurn, recordsProcessedThisTurn, options, timeProvider))
         {
             if (state.ReadyRecordCount == 0)
             {

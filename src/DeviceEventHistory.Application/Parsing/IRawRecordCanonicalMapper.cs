@@ -1,4 +1,3 @@
-using DeviceEventHistory.Domain.Events;
 
 namespace DeviceEventHistory.Application.Parsing;
 

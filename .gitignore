@@ -25,6 +25,7 @@ coverage/
 .env.*
 !.env.example
 appsettings*.json
+!appsettings.Example.json
 secrets.json
 
 # NuGet and package caches
@@ -47,6 +48,7 @@ Desktop.ini
 node_modules/
 pptx-build/
 pptx-*/
+/bridge/
 *.pidb
 *.pdb
 *.cache

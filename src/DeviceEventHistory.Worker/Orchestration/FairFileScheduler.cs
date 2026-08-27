@@ -4,7 +4,6 @@ using DeviceEventHistory.Application.Observability;
 using DeviceEventHistory.Domain.Common;
 using DeviceEventHistory.Infrastructure.Observability;
 using DeviceEventHistory.Worker.Configuration;
-using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
 namespace DeviceEventHistory.Worker.Orchestration;

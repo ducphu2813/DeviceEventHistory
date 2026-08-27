@@ -1,6 +1,5 @@
 using DeviceEventHistory.Application.Metadata;
 using DeviceEventHistory.Domain.Common;
-using DeviceEventHistory.Infrastructure.RfidRawLog.Configuration;
 using DeviceEventHistory.Infrastructure.RfidRawLog.Discovery;
 
 namespace DeviceEventHistory.Infrastructure.RfidRawLog.Reading;
