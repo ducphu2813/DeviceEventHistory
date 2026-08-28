@@ -25,6 +25,8 @@ public sealed record RawSourceEvent
 
     public required string PayloadSha256 { get; init; }
 
+    public required long PayloadSizeBytes { get; init; }
+
     public required string ConnectionGeneration { get; init; }
 
     public required long ReceiveSequence { get; init; }

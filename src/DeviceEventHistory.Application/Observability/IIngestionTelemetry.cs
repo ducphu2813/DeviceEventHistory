@@ -43,4 +43,10 @@ public interface IIngestionTelemetry
         long? fileLength,
         int pendingBytes,
         DateTimeOffset? checkpointUpdatedAtUtc);
+
+    void RecordAppHubCallbackReceived(string sourceId, string eventName);
+
+    void RecordAppHubCallbackAdmitted(string sourceId, string eventName);
+
+    void RecordAppHubCallbackDropped(string sourceId, string eventName, string reason);
 }

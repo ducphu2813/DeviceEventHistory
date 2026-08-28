@@ -173,6 +173,7 @@ public sealed class CanonicalIngestionBoundaryTests
         ReceivedAtUtc = new DateTimeOffset(2026, 8, 28, 8, 30, 0, TimeSpan.Zero),
         RawArgumentsJson = "[]",
         PayloadSha256 = "payload-hash",
+        PayloadSizeBytes = 2,
         ConnectionGeneration = "generation-1",
         ReceiveSequence = 1,
         DeliveryKind = AppConst.DeliveryKinds.Realtime

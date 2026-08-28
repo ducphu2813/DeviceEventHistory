@@ -39,7 +39,7 @@ public sealed class UnmappedRawSourceEventMapper : IRawSourceEventMapper
                 Format = AppConst.AppHub.PayloadFormat,
                 ArgumentsJson = sourceEvent.RawArgumentsJson,
                 Sha256 = sourceEvent.PayloadSha256,
-                SizeBytes = System.Text.Encoding.UTF8.GetByteCount(sourceEvent.RawArgumentsJson)
+                SizeBytes = sourceEvent.PayloadSizeBytes
             },
             Error = new CanonicalIngestionFailure.ErrorContext
             {

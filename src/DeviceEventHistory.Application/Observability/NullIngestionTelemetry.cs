@@ -83,4 +83,16 @@ public sealed class NullIngestionTelemetry : IIngestionTelemetry
         DateTimeOffset? checkpointUpdatedAtUtc)
     {
     }
+
+    public void RecordAppHubCallbackReceived(string sourceId, string eventName)
+    {
+    }
+
+    public void RecordAppHubCallbackAdmitted(string sourceId, string eventName)
+    {
+    }
+
+    public void RecordAppHubCallbackDropped(string sourceId, string eventName, string reason)
+    {
+    }
 }

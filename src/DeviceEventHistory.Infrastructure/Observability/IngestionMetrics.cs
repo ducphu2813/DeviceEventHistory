@@ -46,6 +46,12 @@ public sealed class IngestionMetrics : IIngestionTelemetry
         AppConst.Observability.MetricOversizedRecords);
     private readonly Counter<long> truncatedFiles = Meter.CreateCounter<long>(
         AppConst.Observability.MetricTruncatedFiles);
+    private readonly Counter<long> appHubCallbacksReceived = Meter.CreateCounter<long>(
+        AppConst.Observability.MetricAppHubCallbacksReceived);
+    private readonly Counter<long> appHubCallbacksAdmitted = Meter.CreateCounter<long>(
+        AppConst.Observability.MetricAppHubCallbacksAdmitted);
+    private readonly Counter<long> appHubCallbacksDropped = Meter.CreateCounter<long>(
+        AppConst.Observability.MetricAppHubCallbacksDropped);
     private readonly Histogram<double> persistenceLatency = Meter.CreateHistogram<double>(
         AppConst.Observability.MetricPersistenceLatency,
         "ms");
@@ -175,6 +181,18 @@ public sealed class IngestionMetrics : IIngestionTelemetry
             pendingBytes,
             checkpointUpdatedAtUtc);
 
+    public void RecordAppHubCallbackReceived(string sourceId, string eventName) =>
+        appHubCallbacksReceived.Add(1, AppHubTags(sourceId, eventName));
+
+    public void RecordAppHubCallbackAdmitted(string sourceId, string eventName) =>
+        appHubCallbacksAdmitted.Add(1, AppHubTags(sourceId, eventName));
+
+    public void RecordAppHubCallbackDropped(string sourceId, string eventName, string reason)
+    {
+        appHubCallbacksDropped.Add(1, AppHubTags(sourceId, eventName, reason));
+        healthState.MarkSourceUnavailable(sourceId);
+    }
+
     private IEnumerable<Measurement<long>> ObserveLagBytes()
     {
         foreach (var file in healthState.Snapshot.Files)
@@ -213,6 +231,21 @@ public sealed class IngestionMetrics : IIngestionTelemetry
         if (status is not null)
         {
             tags.Add(AppConst.Observability.TagStatus, status);
+        }
+
+        return tags;
+    }
+
+    private static TagList AppHubTags(string sourceId, string eventName, string? reason = null)
+    {
+        var tags = new TagList
+        {
+            { AppConst.Observability.TagSourceId, sourceId },
+            { AppConst.Observability.TagEventName, eventName }
+        };
+        if (reason is not null)
+        {
+            tags.Add(AppConst.Observability.TagReason, reason);
         }
 
         return tags;

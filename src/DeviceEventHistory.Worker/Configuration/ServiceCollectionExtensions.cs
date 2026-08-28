@@ -5,6 +5,8 @@ using DeviceEventHistory.Application.Persistence;
 using DeviceEventHistory.Application.Ingestion;
 using DeviceEventHistory.Domain.Common;
 using DeviceEventHistory.Infrastructure.Metadata;
+using DeviceEventHistory.Infrastructure.AppHub.Configuration;
+using DeviceEventHistory.Infrastructure.AppHub.Transport;
 using DeviceEventHistory.Infrastructure.MongoDb;
 using DeviceEventHistory.Infrastructure.MongoDb.Configuration;
 using DeviceEventHistory.Infrastructure.MongoDb.Execution;
@@ -62,6 +64,8 @@ public static class ServiceCollectionExtensions
             .Bind(configuration.GetSection(ObservabilityOptions.SectionName))
             .ValidateOnStart();
         services.AddSingleton<IValidateOptions<ObservabilityOptions>, ObservabilityOptionsValidator>();
+
+        services.AddErpAppHubIngestion(configuration);
 
         services.AddSingleton<ConfigurationRedactor>();
         services.AddSingleton<ConfigurationDeviceMetadataResolver>(serviceProvider =>
@@ -158,7 +162,21 @@ public static class ServiceCollectionExtensions
             .AddCheck<SourcePathHealthCheck>(AppConst.Observability.SourceHealthCheckName)
             .AddCheck<IngestionProgressHealthCheck>(AppConst.Observability.IngestionHealthCheckName);
         services.AddHostedService<StartupInitializationHostedService>();
+        services.AddHostedService<ErpAppHubMonitoringHostedService>();
 
+        return services;
+    }
+
+    public static IServiceCollection AddErpAppHubIngestion(
+        this IServiceCollection services,
+        IConfiguration configuration)
+    {
+        services.AddOptions<AppHubOptions>()
+            .Bind(configuration.GetSection(AppHubOptions.SectionName))
+            .ValidateOnStart();
+        services.AddSingleton<IValidateOptions<AppHubOptions>, AppHubOptionsValidator>();
+        services.AddSingleton<IAppHubMonitoringConnectionFactory, AppHubMonitoringConnectionFactory>();
+        services.AddSingleton<AppHubCallbackRegistrar>();
         return services;
     }
 }
