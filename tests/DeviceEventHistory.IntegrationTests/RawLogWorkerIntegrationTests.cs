@@ -105,8 +105,10 @@ public sealed class RawLogWorkerIntegrationTests
                 new RfidRawRecordParser(new BlockTokenizer()),
                 new CanonicalDeviceEventMapper());
             var coordinator = new RawRecordPersistenceCoordinator(
-                new MongoDeviceEventHistoryWriter(context, retryPolicy),
-                new MongoIngestionFailureWriter(context, retryPolicy),
+                new CanonicalIngestionPersistenceService(
+                    new MongoDeviceEventHistoryWriter(context, retryPolicy),
+                    new MongoIngestionFailureWriter(context, retryPolicy),
+                    TimeProvider.System),
                 checkpointStore,
                 TimeProvider.System);
             var registry = new FileRegistry(

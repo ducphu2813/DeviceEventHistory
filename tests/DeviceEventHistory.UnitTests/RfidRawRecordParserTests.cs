@@ -39,6 +39,11 @@ public sealed class RfidRawRecordParserTests
         Assert.Equal(context.RawPayloadText, result.Event.RawPayload.Text);
         Assert.Equal(context.OffsetStart, result.Event.Source.OffsetStart);
         Assert.Equal(context.OffsetEnd, result.Event.Source.OffsetEnd);
+        Assert.Equal(AppConst.SourceTransports.File, result.Event.Source.Transport);
+        Assert.Equal(AppConst.RawLog.RecordEventName, result.Event.Source.EventName);
+        Assert.Equal(AppConst.TimeBases.Occurred, result.Event.TimeBasis);
+        Assert.Equal(result.Event.OccurredAtUtc, result.Event.TimelineAtUtc);
+        Assert.Equal(context.RawPayloadBytes.LongLength, result.Event.RawPayload.SizeBytes);
         Assert.NotEmpty(result.Event.EventId);
     }
 
@@ -87,9 +92,9 @@ public sealed class RfidRawRecordParserTests
 
         Assert.Null(first.Event);
         Assert.NotNull(first.Failure);
-        Assert.Equal(AppConst.Parsing.InvalidRawBlock, first.Failure!.Code);
+        Assert.Equal(AppConst.Parsing.InvalidRawBlock, first.Failure!.Error.Code);
         Assert.Equal(first.Failure.FailureId, second.Failure!.FailureId);
-        Assert.Equal(context.RawPayloadText, first.Failure.Context.RawPayloadText);
+        Assert.Equal(context.RawPayloadText, first.Failure.RawPayload.Text);
     }
 
     [Fact]

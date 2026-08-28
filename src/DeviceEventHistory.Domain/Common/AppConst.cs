@@ -56,6 +56,7 @@ public static class AppConst
         public const string Producer = "RFID.Antenna";
         public const string SourceKind = "rfid_antenna_file";
         public const string PayloadFormat = "rfid-raw-v1";
+        public const string RecordEventName = "raw_record";
         public const string RelativePathDateFormat = "yyyy/MM/dd";
         public const string HeaderBlock = "@";
         public const string GateStateBlock = "b";
@@ -79,6 +80,12 @@ public static class AppConst
         public const string FilePatternRegex = @"^File_[A-Za-z0-9_?*.-]+\.txt$";
         public const string RecordTerminator = "e(0)";
         public const string FileNameRegex = @"^File_(?<fileId>\d+)\.txt$";
+    }
+
+    public static class AppHub
+    {
+        public const string ParserVersion = "erp-apphub-v1";
+        public const string PayloadFormat = "signalr-arguments-json-v1";
     }
 
     public static class MongoDb
@@ -248,6 +255,32 @@ public static class AppConst
             "Checkpoint version conflict was detected for '{0}'.";
         public const string MSG_PERSISTENCE_OUTCOME_REQUIRED =
             "A raw record processing result must contain an event or failure.";
+        public const string MSG_CANONICAL_INGESTION_OUTCOME_REQUIRED =
+            "A canonical ingestion result must contain an event or failure.";
+        public const string MSG_CANONICAL_INGESTION_OUTCOME_EXCLUSIVE =
+            "A canonical ingestion result cannot contain both an event and a failure.";
+        public const string MSG_RAW_SOURCE_EVENT_MAPPER_KEY_DUPLICATED =
+            "A raw source event mapper is already registered for key '{0}'.";
+        public const string MSG_RAW_SOURCE_EVENT_UNMAPPED =
+            "No canonical mapper is registered for source kind '{0}' and event '{1}'.";
+        public const string MSG_RAW_RECORD_FILE_SOURCE_CONTEXT_REQUIRED =
+            "Raw-record persistence requires a complete file source context.";
+        public const string MSG_RAW_LOG_FAILURE_COMPANY_ID_REQUIRED =
+            "Raw-log failure persistence requires a company ID.";
+        public const string MSG_RAW_LOG_FAILURE_FILE_ID_REQUIRED =
+            "Raw-log failure persistence requires a file ID.";
+        public const string MSG_RAW_LOG_FAILURE_FILE_NAME_REQUIRED =
+            "Raw-log failure persistence requires a file name.";
+        public const string MSG_RAW_LOG_FAILURE_RELATIVE_PATH_REQUIRED =
+            "Raw-log failure persistence requires a relative path.";
+        public const string MSG_RAW_LOG_FAILURE_FOLDER_DATE_REQUIRED =
+            "Raw-log failure persistence requires a folder date.";
+        public const string MSG_RAW_LOG_FAILURE_START_OFFSET_REQUIRED =
+            "Raw-log failure persistence requires a start offset.";
+        public const string MSG_RAW_LOG_FAILURE_END_OFFSET_REQUIRED =
+            "Raw-log failure persistence requires an end offset.";
+        public const string MSG_RAW_LOG_FAILURE_RAW_TEXT_REQUIRED =
+            "Raw-log failure persistence requires raw text.";
         public const string MSG_CHECKPOINT_CONFIRMATION_REQUIRED =
             "Checkpoint advance was not confirmed after persistence.";
         public const string MSG_RAW_LOG_STATE_STOPPED =
@@ -280,17 +313,84 @@ public static class AppConst
     {
         public const string TagRead = "tag_read";
         public const string BusinessProcess = "business_process";
+        public const string GateState = "gate_state";
+        public const string DeviceOnline = "device_online";
+        public const string DeviceConnection = "device_connection";
+        public const string ScannerConnection = "scanner_connection";
+        public const string ClientDeviceConnection = "client_device_connection";
+        public const string DeviceControlState = "device_control_state";
+        public const string DeviceSensorState = "device_sensor_state";
+        public const string DeviceSnapshot = "device_snapshot";
+        public const string DeviceError = "device_error";
+        public const string ApplicationError = "application_error";
         public const string Unknown = "unknown";
+    }
+
+    public static class SourceKinds
+    {
+        public const string RfidAntennaFile = "rfid_antenna_file";
+        public const string ErpAppHub = "erp_apphub";
+        public const string DirectPublisher = "direct_publisher";
+        public const string ScannerApplication = "scanner_application";
+        public const string ApplicationLog = "application_log";
+    }
+
+    public static class SchemaVersions
+    {
+        public const int CanonicalV2 = 2;
+    }
+
+    public static class SourceTransports
+    {
+        public const string File = "file";
+        public const string HttpRange = "http_range";
+        public const string ClassicSignalR = "classic_signalr";
+        public const string Http = "http";
+        public const string MessageBroker = "message_broker";
+        public const string ApplicationLog = "application_log";
+    }
+
+    public static class DeliveryKinds
+    {
+        public const string Activity = "activity";
+        public const string Realtime = "realtime";
+        public const string Snapshot = "snapshot";
+        public const string SnapshotCandidate = "snapshot_candidate";
+        public const string ReconnectSnapshot = "reconnect_snapshot";
+        public const string Heartbeat = "heartbeat";
+        public const string Unknown = "unknown";
+    }
+
+    public static class TimeBases
+    {
+        public const string Occurred = "occurred";
+        public const string Received = "received";
+    }
+
+    public static class IngestionStages
+    {
+        public const string Admission = "admission";
+        public const string Framing = "framing";
+        public const string Deserialization = "deserialization";
+        public const string Validation = "validation";
+        public const string MetadataResolution = "metadata_resolution";
+        public const string Mapping = "mapping";
+        public const string PersistenceContract = "persistence_contract";
     }
 
     public static class Parsing
     {
         public const string StatusParsed = "parsed";
         public const string StatusParsedWithWarnings = "parsed_with_warnings";
+        public const string StatusUnmapped = "unmapped";
         public const string InvalidRecordFormat = "INVALID_RECORD_FORMAT";
         public const string InvalidRawBlock = "INVALID_RAW_BLOCK";
         public const string UnknownRawBlock = "UNKNOWN_RAW_BLOCK";
         public const string InvalidSourceTimeZone = "INVALID_SOURCE_TIME_ZONE";
+        public const string TenantMismatch = "TENANT_MISMATCH";
+        public const string TenantUnresolved = "TENANT_UNRESOLVED";
+        public const string PayloadTooLarge = "PAYLOAD_TOO_LARGE";
+        public const string UnknownSourceEvent = "UNKNOWN_SOURCE_EVENT";
     }
 
     public static class Observability

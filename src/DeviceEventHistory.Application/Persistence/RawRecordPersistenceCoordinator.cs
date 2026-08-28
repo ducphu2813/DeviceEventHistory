@@ -1,11 +1,12 @@
 using DeviceEventHistory.Application.Parsing;
 using DeviceEventHistory.Domain.Common;
+using DeviceEventHistory.Domain.Events;
+using DeviceEventHistory.Application.Ingestion;
 
 namespace DeviceEventHistory.Application.Persistence;
 
 public sealed class RawRecordPersistenceCoordinator(
-    IDeviceEventHistoryWriter historyWriter,
-    IIngestionFailureWriter failureWriter,
+    ICanonicalIngestionPersistenceService persistenceService,
     IIngestionCheckpointStore checkpointStore,
     TimeProvider timeProvider) : IRawRecordPersistenceCoordinator
 {
@@ -20,66 +21,61 @@ public sealed class RawRecordPersistenceCoordinator(
         ArgumentNullException.ThrowIfNull(checkpoint);
         ArgumentException.ThrowIfNullOrWhiteSpace(workerId);
 
-        if (processingResult.Event is not null)
+        var ingestionResult = new CanonicalIngestionResult
         {
-            var eventContext = processingResult.Event.Source;
-            var receivedAtUtc = timeProvider.GetUtcNow();
-            var writeResult = await historyWriter.WriteAsync(
-                processingResult.Event,
-                receivedAtUtc,
-                workerId,
-                cancellationToken);
+            Event = processingResult.Event,
+            Failure = processingResult.Failure
+        };
+        ingestionResult.EnsureExactlyOneOutcome();
 
-            return await AdvanceCheckpointAsync(
-                checkpoint,
-                eventContext.SourceId,
-                eventContext.RelativePath,
-                eventContext.FolderDate,
-                eventContext.FileId,
-                eventContext.OffsetEnd,
-                processingResult.Event.RawPayload.Sha256,
-                writeResult.Identity,
-                observedFileLength,
-                workerId,
-                cancellationToken) with
-            {
-                PersistedIdentity = writeResult.Identity,
-                WasFailure = false,
-                WasAlreadyPersisted = writeResult.WasAlreadyPersisted
-            };
-        }
+        var source = ingestionResult.Event?.Source ?? ingestionResult.Failure!.Source;
+        var rawFileContext = RequireRawFileContext(source);
+        var payloadHash = ingestionResult.Event?.RawPayload.Sha256
+            ?? ingestionResult.Failure!.RawPayload.Sha256;
+        var persistenceResult = await persistenceService.PersistAsync(
+            ingestionResult,
+            workerId,
+            cancellationToken);
 
-        if (processingResult.Failure is not null)
+        return await AdvanceCheckpointAsync(
+            checkpoint,
+            source.SourceId,
+            rawFileContext.RelativePath,
+            rawFileContext.FolderDate,
+            rawFileContext.FileId,
+            rawFileContext.OffsetEnd,
+            payloadHash,
+            persistenceResult.PersistedIdentity,
+            observedFileLength,
+            workerId,
+            cancellationToken) with
         {
-            var failure = processingResult.Failure;
-            var receivedAtUtc = timeProvider.GetUtcNow();
-            var writeResult = await failureWriter.WriteAsync(
-                failure,
-                receivedAtUtc,
-                workerId,
-                cancellationToken);
-
-            return await AdvanceCheckpointAsync(
-                checkpoint,
-                failure.Context.SourceId,
-                failure.Context.RelativePath,
-                failure.Context.FolderDate,
-                failure.Context.FileId,
-                failure.Context.OffsetEnd,
-                EventIdentityFactory.ComputePayloadHash(failure.Context),
-                writeResult.Identity,
-                observedFileLength,
-                workerId,
-                cancellationToken) with
-            {
-                PersistedIdentity = writeResult.Identity,
-                WasFailure = true,
-                WasAlreadyPersisted = writeResult.WasAlreadyPersisted
-            };
-        }
-
-        throw new InvalidOperationException(AppConst.Messages.MSG_PERSISTENCE_OUTCOME_REQUIRED);
+            PersistedIdentity = persistenceResult.PersistedIdentity,
+            WasFailure = persistenceResult.WasFailure,
+            WasAlreadyPersisted = persistenceResult.WasAlreadyPersisted
+        };
     }
+
+    private static RawFileContext RequireRawFileContext(
+        CanonicalDeviceEvent.SourceContext source)
+    {
+        if (source.FileId is not long fileId ||
+            string.IsNullOrWhiteSpace(source.RelativePath) ||
+            source.FolderDate is not DateOnly folderDate ||
+            source.OffsetEnd is not long offsetEnd)
+        {
+            throw new InvalidOperationException(
+                AppConst.Messages.MSG_RAW_RECORD_FILE_SOURCE_CONTEXT_REQUIRED);
+        }
+
+        return new RawFileContext(source.RelativePath, folderDate, fileId, offsetEnd);
+    }
+
+    private sealed record RawFileContext(
+        string RelativePath,
+        DateOnly FolderDate,
+        long FileId,
+        long OffsetEnd);
 
     private async Task<RawRecordPersistenceOutcome> AdvanceCheckpointAsync(
         IngestionCheckpoint checkpoint,

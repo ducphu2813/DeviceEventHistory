@@ -37,7 +37,9 @@ internal static class CanonicalDeviceEventDocumentMapper
         { "fileId", source.FileId },
         { "fileName", source.FileName },
         { "relativePath", source.RelativePath },
-        { "folderDate", MongoDocumentValue.DateOnly(source.FolderDate) },
+        { "folderDate", source.FolderDate is DateOnly folderDate
+            ? MongoDocumentValue.DateOnly(folderDate)
+            : BsonNull.Value },
         { "offsetStart", source.OffsetStart },
         { "offsetEnd", source.OffsetEnd }
     };

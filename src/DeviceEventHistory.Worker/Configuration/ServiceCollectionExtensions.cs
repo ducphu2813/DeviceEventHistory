@@ -2,6 +2,7 @@ using DeviceEventHistory.Application.Metadata;
 using DeviceEventHistory.Application.Observability;
 using DeviceEventHistory.Application.Parsing;
 using DeviceEventHistory.Application.Persistence;
+using DeviceEventHistory.Application.Ingestion;
 using DeviceEventHistory.Domain.Common;
 using DeviceEventHistory.Infrastructure.Metadata;
 using DeviceEventHistory.Infrastructure.MongoDb;
@@ -114,6 +115,11 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IRfidRawRecordParser, RfidRawRecordParser>();
         services.AddSingleton<IRawRecordCanonicalMapper, CanonicalDeviceEventMapper>();
         services.AddSingleton<IProcessRawFileRecordHandler, ProcessRawFileRecordHandler>();
+        services.AddSingleton<UnmappedRawSourceEventMapper>();
+        services.AddSingleton<RawSourceEventMapperRegistry>(serviceProvider =>
+            new RawSourceEventMapperRegistry(
+                serviceProvider.GetServices<IRawSourceEventMapper>(),
+                serviceProvider.GetRequiredService<UnmappedRawSourceEventMapper>()));
 
         services.AddSingleton<MongoDbContext>(serviceProvider =>
             new MongoDbContext(
@@ -125,6 +131,7 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<MongoIndexInitializer>();
         services.AddSingleton<IDeviceEventHistoryWriter, MongoDeviceEventHistoryWriter>();
         services.AddSingleton<IIngestionFailureWriter, MongoIngestionFailureWriter>();
+        services.AddSingleton<ICanonicalIngestionPersistenceService, CanonicalIngestionPersistenceService>();
         services.AddSingleton<IIngestionCheckpointStore, MongoIngestionCheckpointStore>();
         services.AddSingleton<IRawRecordPersistenceCoordinator, RawRecordPersistenceCoordinator>();
 
