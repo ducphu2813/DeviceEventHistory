@@ -42,9 +42,12 @@ public sealed class AppHubRawSourceEventFactory
         ArgumentException.ThrowIfNullOrWhiteSpace(connectionGeneration);
         ArgumentException.ThrowIfNullOrWhiteSpace(eventName);
 
-        var orderedArgumentsJson = JsonConvert.SerializeObject(
+        var serializedArgumentsJson = JsonConvert.SerializeObject(
             arguments ?? Array.Empty<object>(),
             Formatting.None);
+        var orderedArgumentsJson = AppHubUserStateRedactor.Redact(
+            serializedArgumentsJson,
+            eventName.Trim());
         var payloadBytes = Encoding.UTF8.GetBytes(orderedArgumentsJson);
         var payloadHash = Convert.ToHexString(SHA256.HashData(payloadBytes)).ToLowerInvariant();
         var envelope = new RawSourceEvent

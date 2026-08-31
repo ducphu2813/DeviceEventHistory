@@ -98,6 +98,35 @@ public static class AppConst
         public const string DefaultHubName = "AppHub";
         public const string JoinMonitoringMethod = "JoinMonitoring";
 
+        public static class UserState
+        {
+            public const string ConnectionId = "ConnectionId";
+            public const string ConnectionIdHash = "ConnectionIdHash";
+            public const string CompanyId = "CompanyId";
+            public const string UserId = "UserId";
+            public const string DateConnected = "DateConnected";
+            public const string SessionType = "SessionType";
+            public const string DeviceType = "DeviceType";
+            public const string DeviceId = "DeviceId";
+            public const string DeviceName = "DeviceName";
+            public const string GateId = "GateId";
+            public const string GateName = "GateName";
+
+            public static IReadOnlySet<string> SensitiveFields { get; } =
+                new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+                {
+                    "UserName",
+                    "Avatar",
+                    "WindowFocus",
+                    "ModuleName",
+                    "Browser",
+                    "Ip",
+                    "SessionId",
+                    "UserId2",
+                    "WantFollowForViewUserState"
+                };
+        }
+
         public static class Callbacks
         {
             public const string ReceiveDeviceOnline = "receiveDeviceOnline";
@@ -147,8 +176,20 @@ public static class AppConst
         public const string HistoryCategoryOccurredAtIndexName = "ix_category_occurred_at_utc_desc";
         public const string HistoryParseReceivedAtIndexName = "ix_parse_received_at_utc_desc";
         public const string HistorySourceOffsetIndexName = "ix_source_file_offset";
+        public const string HistoryCompanyTimelineIndexName = "ix_company_timeline_at_utc_desc";
+        public const string HistoryCompanyCategoryTimelineIndexName = "ix_company_category_timeline_at_utc_desc";
+        public const string HistorySourceKindReceivedAtIndexName = "ix_source_kind_received_at_utc_desc";
+        public const string HistorySourceReceivedAtIndexName = "ix_source_received_at_utc_desc";
+        public const string HistoryEventNameReceivedAtIndexName = "ix_event_name_received_at_utc_desc";
+        public const string HistoryDeviceTimelineIndexName = "ix_device_timeline_at_utc_desc";
+        public const string HistoryGateTimelineIndexName = "ix_gate_timeline_at_utc_desc";
+        public const string HistoryTagTimelineIndexName = "ix_tag_timeline_at_utc_desc";
+        public const string HistoryParseStatusReceivedAtV2IndexName = "ix_parse_status_received_at_utc_desc_v2";
+        public const string HistorySourceOffsetV2IndexName = "ix_source_file_offset_v2";
         public const string FailureSourceOffsetIndexName = "ix_source_file_offset";
         public const string FailureCodeReceivedAtIndexName = "ix_error_code_received_at_utc_desc";
+        public const string FailureSourceErrorReceivedAtIndexName = "ix_source_error_received_at_utc_desc";
+        public const string FailureSourceOffsetV2IndexName = "ix_source_file_offset_v2";
         public const string FailureResolvedAtIndexName = "ix_resolved_at_utc";
         public const string CheckpointSourceIdentityIndexName = "ux_source_folder_file_path";
         public const string CheckpointUpdatedAtIndexName = "ix_updated_at_utc_desc";
@@ -367,6 +408,20 @@ public static class AppConst
             "An AppHub source is required to create a source runtime.";
         public const string MSG_APPHUB_RUNTIME_ALREADY_STARTED =
             "The AppHub source runtime has already started.";
+        public const string MSG_APPHUB_PAYLOAD_JSON_INVALID =
+            "AppHub callback payload is not valid JSON.";
+        public const string MSG_APPHUB_PAYLOAD_ARGUMENT_REQUIRED =
+            "AppHub callback payload must contain a JSON object argument.";
+        public const string MSG_APPHUB_TENANT_MISMATCH =
+            "AppHub payload CompanyId {0} does not match configured CompanyId {1}.";
+        public const string MSG_APPHUB_TENANT_UNRESOLVED =
+            "AppHub CompanyId cannot be resolved.";
+        public const string MSG_APPHUB_REQUIRED_FIELD_MISSING =
+            "AppHub callback '{0}' is missing required field '{1}'.";
+        public const string MSG_APPHUB_SOURCE_MAPPING_ID_REQUIRED =
+            "AppHub source mapping options require a SourceId.";
+        public const string MSG_APPHUB_SOURCE_MAPPING_ID_DUPLICATED =
+            "AppHub source mapping options are duplicated for '{0}'.";
         public const string MSG_APPHUB_CALLBACK_NAME_REQUIRED =
             "AppHub callback name is required.";
         public const string MSG_APPHUB_CALLBACK_REGISTERED_AFTER_START =
@@ -479,6 +534,14 @@ public static class AppConst
         public const string Received = "received";
     }
 
+    public static class CanonicalValues
+    {
+        public const string ConnectionStatusConnected = "connected";
+        public const string ConnectionStatusDisconnected = "disconnected";
+        public const string ConnectionStatusUnknown = "unknown";
+        public const string ScannerDeviceType = "scanner";
+    }
+
     public static class IngestionStages
     {
         public const string Admission = "admission";
@@ -503,6 +566,11 @@ public static class AppConst
         public const string TenantUnresolved = "TENANT_UNRESOLVED";
         public const string PayloadTooLarge = "PAYLOAD_TOO_LARGE";
         public const string UnknownSourceEvent = "UNKNOWN_SOURCE_EVENT";
+        public const string AppHubOpaqueContractUnconfirmed = "APPHUB_OPAQUE_CONTRACT_UNCONFIRMED";
+        public const string SourceTimeMissing = "SOURCE_TIME_MISSING";
+        public const string SourceTimeUntrusted = "SOURCE_TIME_UNTRUSTED";
+        public const string OptionalFieldMissing = "OPTIONAL_FIELD_MISSING";
+        public const string ScannerConnectionIdMissing = "SCANNER_CONNECTION_ID_MISSING";
         public const string PayloadSizeBytesDetail = "payload_size_bytes";
         public const string MaximumPayloadBytesDetail = "maximum_payload_bytes";
     }

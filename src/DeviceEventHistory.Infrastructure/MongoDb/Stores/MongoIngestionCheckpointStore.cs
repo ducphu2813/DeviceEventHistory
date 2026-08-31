@@ -61,6 +61,8 @@ public sealed class MongoIngestionCheckpointStore(
             ? new BsonInt64(request.ObservedFileLength.Value)
             : BsonNull.Value;
         var update = Builders<BsonDocument>.Update
+            .Set("schemaVersion", AppConst.SchemaVersions.CanonicalV2)
+            .Set("sourceKind", AppConst.RawLog.SourceKind)
             .Set("sourceId", key.SourceId)
             .Set("folderDate", key.FolderDate.ToString(AppConst.MongoDb.CheckpointDateFormat))
             .Set("fileId", key.FileId)

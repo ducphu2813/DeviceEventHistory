@@ -3,6 +3,7 @@ using DeviceEventHistory.Application.Observability;
 using DeviceEventHistory.Application.Parsing;
 using DeviceEventHistory.Application.Persistence;
 using DeviceEventHistory.Application.Ingestion;
+using DeviceEventHistory.Application.AppHub.Mapping;
 using DeviceEventHistory.Domain.Common;
 using DeviceEventHistory.Infrastructure.Metadata;
 using DeviceEventHistory.Infrastructure.AppHub.Configuration;
@@ -177,6 +178,46 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IValidateOptions<AppHubOptions>, AppHubOptionsValidator>();
         services.AddSingleton<IAppHubMonitoringConnectionFactory, AppHubMonitoringConnectionFactory>();
         services.AddSingleton<AppHubCallbackRegistrar>();
+        services.AddSingleton<IAppHubSourceConfigurationProvider>(serviceProvider =>
+            new AppHubSourceConfigurationProvider(
+                serviceProvider.GetRequiredService<IOptions<AppHubOptions>>().Value.Sources
+                    .Select(source => new AppHubSourceMappingOptions(
+                        source.SourceId,
+                        source.CompanyId,
+                        source.DedicatedSingleTenant))));
+        services.AddSingleton<AppHubTenantResolver>();
+        services.AddSingleton<IRawSourceEventMapper, DeviceOnlineEventMapper>();
+        services.AddSingleton<IRawSourceEventMapper, DeviceConnectionEventMapper>();
+        services.AddSingleton<IRawSourceEventMapper>(serviceProvider =>
+            new DeviceControlStateEventMapper(
+                serviceProvider.GetRequiredService<AppHubTenantResolver>(),
+                AppConst.AppHub.Callbacks.ReceiveGreenState));
+        services.AddSingleton<IRawSourceEventMapper>(serviceProvider =>
+            new DeviceControlStateEventMapper(
+                serviceProvider.GetRequiredService<AppHubTenantResolver>(),
+                AppConst.AppHub.Callbacks.ReceiveRedState));
+        services.AddSingleton<IRawSourceEventMapper, DeviceSensorStateEventMapper>();
+        services.AddSingleton<IRawSourceEventMapper, DeviceReadTagEventMapper>();
+        services.AddSingleton<IRawSourceEventMapper>(serviceProvider =>
+            new ScannerEventMapper(
+                serviceProvider.GetRequiredService<AppHubTenantResolver>(),
+                AppConst.AppHub.Callbacks.ReceiveDeviceScanConnect));
+        services.AddSingleton<IRawSourceEventMapper>(serviceProvider =>
+            new ScannerEventMapper(
+                serviceProvider.GetRequiredService<AppHubTenantResolver>(),
+                AppConst.AppHub.Callbacks.ReceiveDeviceScanDisconnect));
+        services.AddSingleton<IRawSourceEventMapper>(serviceProvider =>
+            new ScannerEventMapper(
+                serviceProvider.GetRequiredService<AppHubTenantResolver>(),
+                AppConst.AppHub.Callbacks.ReceiveRequestDeviceScanInfoOnline));
+        services.AddSingleton<IRawSourceEventMapper>(serviceProvider =>
+            new ClientDeviceConnectionEventMapper(
+                serviceProvider.GetRequiredService<AppHubTenantResolver>(),
+                AppConst.AppHub.Callbacks.ReceiveClientDeviceConnected));
+        services.AddSingleton<IRawSourceEventMapper>(serviceProvider =>
+            new ClientDeviceConnectionEventMapper(
+                serviceProvider.GetRequiredService<AppHubTenantResolver>(),
+                AppConst.AppHub.Callbacks.ReceiveClientDeviceDisconnected));
         return services;
     }
 }

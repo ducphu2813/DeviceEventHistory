@@ -1,6 +1,7 @@
-using DeviceEventHistory.Domain.Events;
 using DeviceEventHistory.Domain.Common;
+using DeviceEventHistory.Domain.Events;
 using MongoDB.Bson;
+using MongoDB.Bson.Serialization;
 
 namespace DeviceEventHistory.Infrastructure.MongoDb.Mapping;
 
@@ -10,99 +11,313 @@ internal static class CanonicalDeviceEventDocumentMapper
         CanonicalDeviceEvent deviceEvent,
         DateTimeOffset receivedAtUtc,
         DateTimeOffset persistedAtUtc,
-        string workerId) => new()
+        string workerId)
     {
-        { "_id", ObjectId.GenerateNewId() },
-        { "eventId", deviceEvent.EventId },
-        { "schemaVersion", deviceEvent.SchemaVersion },
-        { "category", deviceEvent.Category },
-        { "sourceKind", deviceEvent.SourceKind },
-        { "companyId", deviceEvent.CompanyId },
-        { "occurredAtUtc", MongoDocumentValue.DateTimeOffset(deviceEvent.OccurredAtUtc) },
-        { "occurredAtLocal", MongoDocumentValue.String(deviceEvent.OccurredAtLocal?.ToString(AppConst.Identity.IsoDateTimeFormat)) },
-        { "receivedAtUtc", MongoDocumentValue.DateTimeOffset(receivedAtUtc) },
-        { "persistedAtUtc", MongoDocumentValue.DateTimeOffset(persistedAtUtc) },
-        { "source", MapSource(deviceEvent.Source) },
-        { "device", MapDevice(deviceEvent.Device) },
-        { "rawPayload", MapRawPayload(deviceEvent.RawPayload) },
-        { "facts", MapFacts(deviceEvent.Facts) },
-        { "parse", MapParse(deviceEvent.Parse) },
-        { "ingestion", new BsonDocument("workerId", workerId) }
-    };
+        var document = new BsonDocument
+        {
+            { "_id", ObjectId.GenerateNewId() },
+            { "eventId", deviceEvent.EventId },
+            { "schemaVersion", deviceEvent.SchemaVersion },
+            { "category", deviceEvent.Category },
+            { "sourceKind", deviceEvent.SourceKind },
+            { "companyId", deviceEvent.CompanyId },
+            { "occurredAtUtc", MongoDocumentValue.DateTimeOffset(deviceEvent.OccurredAtUtc) },
+            { "occurredAtLocal", MongoDocumentValue.String(
+                deviceEvent.OccurredAtLocal?.ToString(AppConst.Identity.IsoDateTimeFormat)) },
+            { "receivedAtUtc", MongoDocumentValue.DateTimeOffset(
+                deviceEvent.ReceivedAtUtc ?? receivedAtUtc) },
+            { "persistedAtUtc", MongoDocumentValue.DateTimeOffset(
+                deviceEvent.PersistedAtUtc ?? persistedAtUtc) },
+            { "timelineAtUtc", MongoDocumentValue.DateTimeOffset(deviceEvent.TimelineAtUtc) },
+            { "timeBasis", MongoDocumentValue.String(deviceEvent.TimeBasis) },
+            { "source", MapSource(deviceEvent.Source) },
+            { "rawPayload", MapRawPayload(deviceEvent.RawPayload) },
+            { "facts", MapFacts(deviceEvent.Facts) },
+            { "parse", MapParse(deviceEvent.Parse) },
+            { "ingestion", new BsonDocument
+                {
+                    { "workerId", workerId },
+                    { "attempt", deviceEvent.Ingestion?.Attempt ?? 1 },
+                    { "processingDurationMs", MongoDocumentValue.Int64(
+                        deviceEvent.Ingestion?.ProcessingDurationMs) }
+                } }
+        };
 
-    private static BsonDocument MapSource(CanonicalDeviceEvent.SourceContext source) => new()
+        AddOptional(document, "device", MapDevice(deviceEvent.Device));
+        return document;
+    }
+
+    private static BsonDocument MapSource(CanonicalDeviceEvent.SourceContext source)
     {
-        { "producer", source.Producer },
-        { "sourceId", source.SourceId },
-        { "fileId", source.FileId },
-        { "fileName", source.FileName },
-        { "relativePath", source.RelativePath },
-        { "folderDate", source.FolderDate is DateOnly folderDate
+        var document = new BsonDocument
+        {
+            { "producer", source.Producer },
+            { "sourceId", source.SourceId }
+        };
+        AddOptional(document, "transport", MongoDocumentValue.String(source.Transport));
+        AddOptional(document, "eventName", MongoDocumentValue.String(source.EventName));
+        AddOptional(document, "sourceEventId", MongoDocumentValue.String(source.SourceEventId));
+        AddOptional(document, "deliveryKind", MongoDocumentValue.String(source.DeliveryKind));
+        AddOptional(document, "connectionGeneration", MongoDocumentValue.String(
+            source.ConnectionGeneration));
+        AddOptional(document, "receiveSequence", MongoDocumentValue.Int64(source.ReceiveSequence));
+        AddOptional(document, "fileId", MongoDocumentValue.Int64(source.FileId));
+        AddOptional(document, "fileName", MongoDocumentValue.String(source.FileName));
+        AddOptional(document, "relativePath", MongoDocumentValue.String(source.RelativePath));
+        AddOptional(document, "folderDate", source.FolderDate is DateOnly folderDate
             ? MongoDocumentValue.DateOnly(folderDate)
-            : BsonNull.Value },
-        { "offsetStart", source.OffsetStart },
-        { "offsetEnd", source.OffsetEnd }
-    };
+            : null);
+        AddOptional(document, "offsetStart", MongoDocumentValue.Int64(source.OffsetStart));
+        AddOptional(document, "offsetEnd", MongoDocumentValue.Int64(source.OffsetEnd));
+        return document;
+    }
 
-    private static BsonValue MapDevice(CanonicalDeviceEvent.DeviceContext? device) =>
-        device is null
-            ? BsonNull.Value
+    private static BsonDocument? MapDevice(CanonicalDeviceEvent.DeviceContext? device)
+    {
+        if (device is null)
+        {
+            return null;
+        }
+
+        var document = new BsonDocument();
+        AddOptional(document, "id", MongoDocumentValue.Int32(device.Id));
+        AddOptional(document, "gateId", MongoDocumentValue.Int32(device.GateId));
+        AddOptional(document, "type", MongoDocumentValue.String(device.Type));
+        AddOptional(document, "code", MongoDocumentValue.String(device.Code));
+        AddOptional(document, "name", MongoDocumentValue.String(device.Name));
+        AddOptional(document, "gateCode", MongoDocumentValue.String(device.GateCode));
+        AddOptional(document, "gateName", MongoDocumentValue.String(device.GateName));
+        return document;
+    }
+
+    private static BsonDocument MapRawPayload(CanonicalDeviceEvent.RawPayloadContext rawPayload)
+    {
+        var document = new BsonDocument { { "format", rawPayload.Format } };
+        AddOptional(document, "text", MongoDocumentValue.String(rawPayload.Text));
+        AddOptional(document, "arguments", ParseArguments(rawPayload.ArgumentsJson));
+        AddOptional(document, "sha256", rawPayload.Sha256);
+        AddOptional(document, "sizeBytes", MongoDocumentValue.Int64(rawPayload.SizeBytes));
+        return document;
+    }
+
+    private static BsonValue? ParseArguments(string? argumentsJson)
+    {
+        if (string.IsNullOrWhiteSpace(argumentsJson))
+        {
+            return null;
+        }
+
+        try
+        {
+            return BsonSerializer.Deserialize<BsonValue>(argumentsJson);
+        }
+        catch (Exception exception) when (
+            exception is BsonSerializationException
+                or FormatException
+                or InvalidOperationException)
+        {
+            return new BsonString(argumentsJson);
+        }
+    }
+
+    private static BsonDocument MapFacts(CanonicalDeviceEvent.FactsContext facts)
+    {
+        var document = new BsonDocument();
+        AddOptional(document, "tagRead", MapTagRead(facts.TagRead));
+        AddOptional(document, "gateState", MapGateState(facts.GateState));
+        AddOptional(document, "signal", MapSignal(facts.Signal));
+        AddOptional(document, "businessEvent", MapBusinessEvent(facts.BusinessEvent));
+        AddOptional(document, "styleProcess", MapStyleProcess(facts.StyleProcess));
+        AddOptional(document, "user", MapUser(facts.User));
+        AddOptional(document, "connection", MapConnection(facts.Connection));
+        AddOptional(document, "deviceOnline", MapDeviceOnline(facts.DeviceOnline));
+        AddOptional(document, "deviceControlState", MapDeviceControlState(facts.DeviceControlState));
+        AddOptional(document, "sensorState", MapSensorState(facts.SensorState));
+        AddOptional(document, "scanner", MapScanner(facts.Scanner));
+        AddOptional(document, "deviceError", MapDeviceError(facts.DeviceError));
+        return document;
+    }
+
+    private static BsonDocument? MapTagRead(CanonicalDeviceEvent.TagReadFacts? facts) =>
+        facts is null
+            ? null
             : new BsonDocument
             {
-                { "id", MongoDocumentValue.Int32(device.Id) },
-                { "gateId", MongoDocumentValue.Int32(device.GateId) }
+                { "tagId", facts.TagId },
+                { "routingFileId", facts.RoutingFileId }
             };
 
-    private static BsonDocument MapRawPayload(CanonicalDeviceEvent.RawPayloadContext rawPayload) => new()
+    private static BsonDocument? MapGateState(CanonicalDeviceEvent.GateStateFacts? facts)
     {
-        { "format", rawPayload.Format },
-        { "text", rawPayload.Text },
-        { "sha256", rawPayload.Sha256 }
-    };
+        if (facts is null)
+        {
+            return null;
+        }
 
-    private static BsonDocument MapFacts(CanonicalDeviceEvent.FactsContext facts) => new()
+        var document = new BsonDocument();
+        AddOptional(document, "stateCode", MongoDocumentValue.Int32(facts.StateCode));
+        AddOptional(document, "rawValue", MongoDocumentValue.String(facts.RawValue));
+        return document;
+    }
+
+    private static BsonDocument? MapSignal(CanonicalDeviceEvent.SignalFacts? facts)
     {
-        { "tagRead", facts.TagRead is null ? BsonNull.Value : new BsonDocument
-            {
-                { "tagId", facts.TagRead.TagId },
-                { "routingFileId", facts.TagRead.RoutingFileId }
-            } },
-        { "gateState", facts.GateState is null ? BsonNull.Value : new BsonDocument
-            {
-                { "stateCode", MongoDocumentValue.Int32(facts.GateState.StateCode) },
-                { "rawValue", MongoDocumentValue.String(facts.GateState.RawValue) }
-            } },
-        { "signal", facts.Signal is null ? BsonNull.Value : new BsonDocument
-            {
-                { "antennaPort", MongoDocumentValue.Int32(facts.Signal.AntennaPort) },
-                { "firstSeenAtLocal", MongoDocumentValue.String(facts.Signal.FirstSeenAtLocal?.ToString(AppConst.Identity.IsoDateTimeFormat)) },
-                { "lastSeenAtLocal", MongoDocumentValue.String(facts.Signal.LastSeenAtLocal?.ToString(AppConst.Identity.IsoDateTimeFormat)) },
-                { "seenCount", MongoDocumentValue.Int32(facts.Signal.SeenCount) },
-                { "txPower", MongoDocumentValue.Int32(facts.Signal.TxPower) },
-                { "dopplerFrequency", MongoDocumentValue.Double(facts.Signal.DopplerFrequency) },
-                { "phaseAngle", MongoDocumentValue.Double(facts.Signal.PhaseAngle) },
-                { "channelMhz", MongoDocumentValue.Double(facts.Signal.ChannelMhz) },
-                { "peakRssiDbm", MongoDocumentValue.Double(facts.Signal.PeakRssiDbm) }
-            } },
-        { "businessEvent", facts.BusinessEvent is null ? BsonNull.Value : new BsonDocument
-            {
-                { "eventType", MongoDocumentValue.Int32(facts.BusinessEvent.EventType) },
-                { "processId", MongoDocumentValue.Int32(facts.BusinessEvent.ProcessId) },
-                { "quantity", MongoDocumentValue.Int32(facts.BusinessEvent.Quantity) },
-                { "processIdsRaw", MongoDocumentValue.String(facts.BusinessEvent.ProcessIdsRaw) },
-                { "processIds", facts.BusinessEvent.ProcessIds is null ? BsonNull.Value : MongoDocumentValue.Int32Array(facts.BusinessEvent.ProcessIds) },
-                { "second", MongoDocumentValue.Int32(facts.BusinessEvent.Second) }
-            } },
-        { "styleProcess", facts.StyleProcess is null ? BsonNull.Value : new BsonDocument
-            {
-                { "processCustomRaw", MongoDocumentValue.String(facts.StyleProcess.ProcessCustomRaw) },
-                { "processCustom", facts.StyleProcess.ProcessCustom is null ? BsonNull.Value : MongoDocumentValue.Int32Array(facts.StyleProcess.ProcessCustom) }
-            } },
-        { "user", facts.User is null ? BsonNull.Value : new BsonDocument
-            {
-                { "userId", MongoDocumentValue.Int32(facts.User.UserId) }
-            } }
-    };
+        if (facts is null)
+        {
+            return null;
+        }
+
+        var document = new BsonDocument();
+        AddOptional(document, "antennaPort", MongoDocumentValue.Int32(facts.AntennaPort));
+        AddOptional(document, "firstSeenAtLocal", MongoDocumentValue.String(
+            facts.FirstSeenAtLocal?.ToString(AppConst.Identity.IsoDateTimeFormat)));
+        AddOptional(document, "lastSeenAtLocal", MongoDocumentValue.String(
+            facts.LastSeenAtLocal?.ToString(AppConst.Identity.IsoDateTimeFormat)));
+        AddOptional(document, "seenCount", MongoDocumentValue.Int32(facts.SeenCount));
+        AddOptional(document, "txPower", MongoDocumentValue.Int32(facts.TxPower));
+        AddOptional(document, "dopplerFrequency", MongoDocumentValue.Double(facts.DopplerFrequency));
+        AddOptional(document, "phaseAngle", MongoDocumentValue.Double(facts.PhaseAngle));
+        AddOptional(document, "channelMhz", MongoDocumentValue.Double(facts.ChannelMhz));
+        AddOptional(document, "peakRssiDbm", MongoDocumentValue.Double(facts.PeakRssiDbm));
+        return document;
+    }
+
+    private static BsonDocument? MapBusinessEvent(
+        CanonicalDeviceEvent.BusinessEventFacts? facts)
+    {
+        if (facts is null)
+        {
+            return null;
+        }
+
+        var document = new BsonDocument();
+        AddOptional(document, "eventType", MongoDocumentValue.Int32(facts.EventType));
+        AddOptional(document, "processId", MongoDocumentValue.Int32(facts.ProcessId));
+        AddOptional(document, "quantity", MongoDocumentValue.Int32(facts.Quantity));
+        AddOptional(document, "processIdsRaw", MongoDocumentValue.String(facts.ProcessIdsRaw));
+        AddOptional(document, "processIds", facts.ProcessIds is null
+            ? null
+            : MongoDocumentValue.Int32Array(facts.ProcessIds));
+        AddOptional(document, "second", MongoDocumentValue.Int32(facts.Second));
+        return document;
+    }
+
+    private static BsonDocument? MapStyleProcess(CanonicalDeviceEvent.StyleProcessFacts? facts)
+    {
+        if (facts is null)
+        {
+            return null;
+        }
+
+        var document = new BsonDocument();
+        AddOptional(document, "processCustomRaw", MongoDocumentValue.String(facts.ProcessCustomRaw));
+        AddOptional(document, "processCustom", facts.ProcessCustom is null
+            ? null
+            : MongoDocumentValue.Int32Array(facts.ProcessCustom));
+        return document;
+    }
+
+    private static BsonDocument? MapUser(CanonicalDeviceEvent.UserFacts? facts) =>
+        facts?.UserId is int userId
+            ? new BsonDocument("userId", userId)
+            : null;
+
+    private static BsonDocument? MapConnection(CanonicalDeviceEvent.ConnectionFacts? facts)
+    {
+        if (facts is null)
+        {
+            return null;
+        }
+
+        var document = new BsonDocument();
+        AddOptional(document, "status", MongoDocumentValue.String(facts.Status));
+        AddOptional(document, "reason", MongoDocumentValue.String(facts.Reason));
+        AddOptional(document, "isSourceConnected", facts.IsSourceConnected is bool connected
+            ? new BsonBoolean(connected)
+            : null);
+        AddOptional(document, "connectedAtLocal", MongoDocumentValue.String(
+            facts.ConnectedAtLocal?.ToString(AppConst.Identity.IsoDateTimeFormat)));
+        return document;
+    }
+
+    private static BsonDocument? MapDeviceOnline(
+        CanonicalDeviceEvent.DeviceOnlineFacts? facts)
+    {
+        if (facts is null)
+        {
+            return null;
+        }
+
+        var document = new BsonDocument();
+        AddOptional(document, "online", facts.Online is bool online ? new BsonBoolean(online) : null);
+        AddOptional(document, "active", facts.Active is bool active ? new BsonBoolean(active) : null);
+        AddOptional(document, "snapshot", facts.IsSnapshot is bool snapshot
+            ? new BsonBoolean(snapshot)
+            : null);
+        AddOptional(document, "sourceState", MongoDocumentValue.String(facts.SourceState));
+        return document;
+    }
+
+    private static BsonDocument? MapDeviceControlState(
+        CanonicalDeviceEvent.DeviceControlStateFacts? facts)
+    {
+        if (facts is null)
+        {
+            return null;
+        }
+
+        var document = new BsonDocument();
+        AddOptional(document, "control", MongoDocumentValue.String(facts.Control));
+        AddOptional(document, "state", MongoDocumentValue.String(facts.State));
+        AddOptional(document, "rawState", MongoDocumentValue.String(facts.RawState));
+        return document;
+    }
+
+    private static BsonDocument? MapSensorState(CanonicalDeviceEvent.SensorStateFacts? facts)
+    {
+        if (facts is null)
+        {
+            return null;
+        }
+
+        var document = new BsonDocument();
+        AddOptional(document, "sensor", MongoDocumentValue.String(facts.Sensor));
+        AddOptional(document, "state", MongoDocumentValue.String(facts.State));
+        AddOptional(document, "timeout", MongoDocumentValue.Double(facts.Timeout));
+        AddOptional(document, "timeoutUnit", MongoDocumentValue.String(facts.TimeoutUnit));
+        return document;
+    }
+
+    private static BsonDocument? MapScanner(CanonicalDeviceEvent.ScannerFacts? facts)
+    {
+        if (facts is null)
+        {
+            return null;
+        }
+
+        var document = new BsonDocument();
+        AddOptional(document, "sessionType", MongoDocumentValue.Int32(facts.SessionType));
+        AddOptional(document, "deviceType", MongoDocumentValue.Int32(facts.DeviceType));
+        AddOptional(document, "connectionIdHash", MongoDocumentValue.String(facts.ConnectionIdHash));
+        return document;
+    }
+
+    private static BsonDocument? MapDeviceError(CanonicalDeviceEvent.DeviceErrorFacts? facts)
+    {
+        if (facts is null)
+        {
+            return null;
+        }
+
+        var document = new BsonDocument();
+        AddOptional(document, "code", MongoDocumentValue.String(facts.Code));
+        AddOptional(document, "message", MongoDocumentValue.String(facts.Message));
+        AddOptional(document, "severity", MongoDocumentValue.String(facts.Severity));
+        AddOptional(document, "retryable", facts.Retryable is bool retryable
+            ? new BsonBoolean(retryable)
+            : null);
+        return document;
+    }
 
     private static BsonDocument MapParse(CanonicalDeviceEvent.ParseContext parse) => new()
     {
@@ -111,4 +326,15 @@ internal static class CanonicalDeviceEventDocumentMapper
         { "warnings", MongoDocumentValue.StringArray(parse.Warnings) },
         { "errors", MongoDocumentValue.StringArray(parse.Errors) }
     };
+
+    private static void AddOptional(
+        BsonDocument document,
+        string name,
+        BsonValue? value)
+    {
+        if (value is not null && !value.IsBsonNull)
+        {
+            document.Add(name, value);
+        }
+    }
 }
