@@ -2,6 +2,7 @@ using DeviceEventHistory.Domain.Common;
 using DeviceEventHistory.Infrastructure.MongoDb.Indexes;
 using DeviceEventHistory.Infrastructure.Observability;
 using DeviceEventHistory.Infrastructure.RfidRawLog.Configuration;
+using DeviceEventHistory.Infrastructure.AppHub.Configuration;
 using DeviceEventHistory.Worker.Configuration;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -13,8 +14,10 @@ public sealed class StartupInitializationHostedService(
     MongoIndexInitializer indexInitializer,
     IOptions<WorkerOptions> workerOptions,
     IOptions<RfidRawLogOptions> rawLogOptions,
-    IngestionHealthState healthState,
-    ILogger<StartupInitializationHostedService> logger) : IHostedService
+        IOptions<AppHubOptions> appHubOptions,
+        IngestionHealthState healthState,
+        AppHubHealthState appHubHealthState,
+        ILogger<StartupInitializationHostedService> logger) : IHostedService
 {
     public async Task StartAsync(CancellationToken cancellationToken)
     {
@@ -27,6 +30,15 @@ public sealed class StartupInitializationHostedService(
             rawLogOptions.Value.Sources
                 .Where(source => source.Enabled)
                 .Select(source => source.SourceId));
+        if (appHubOptions.Value.Enabled)
+        {
+            var appHubSources = (appHubOptions.Value.Sources ?? [])
+                .Select(source => source.SourceId);
+            appHubHealthState.ConfigureSources(appHubSources);
+            healthState.ConfigureSources(
+                (appHubOptions.Value.Sources ?? [])
+                    .Select(source => source.SourceId));
+        }
         await indexInitializer.InitializeAsync(cancellationToken);
         healthState.MarkMongoAvailable();
         healthState.MarkStartupReady();

@@ -1,5 +1,6 @@
 using DeviceEventHistory.Domain.Common;
 using DeviceEventHistory.Domain.Events;
+using DeviceEventHistory.Domain.Failures;
 
 namespace DeviceEventHistory.Application.Parsing;
 
@@ -14,13 +15,23 @@ public sealed class CanonicalDeviceEventMapper : IRawRecordCanonicalMapper
             return new RawRecordProcessingResult
             {
                 ParseStatus = result.Status,
-                Failure = new RawRecordProcessingResult.CanonicalIngestionFailure
+                Failure = new CanonicalIngestionFailure
                 {
                     FailureId = EventIdentityFactory.CreateFailureId(result.Context),
-                    Code = result.Issues.FirstOrDefault(issue => !issue.IsWarning)?.Code ?? AppConst.Parsing.InvalidRecordFormat,
-                    Message = result.Issues.FirstOrDefault(issue => !issue.IsWarning)?.Message ?? AppConst.Messages.MSG_RAW_RECORD_HEADER_REQUIRED,
-                    ParserVersion = AppConst.RawLog.ParserVersion,
-                    Context = result.Context,
+                    SchemaVersion = AppConst.RawLog.SchemaVersion,
+                    SourceKind = AppConst.RawLog.SourceKind,
+                    CompanyId = result.Context.CompanyId,
+                    Source = CreateSourceContext(result.Context),
+                    RawPayload = CreateRawPayload(result.Context),
+                    Error = new CanonicalIngestionFailure.ErrorContext
+                    {
+                        Code = result.Issues.FirstOrDefault(issue => !issue.IsWarning)?.Code
+                            ?? AppConst.Parsing.InvalidRecordFormat,
+                        Message = result.Issues.FirstOrDefault(issue => !issue.IsWarning)?.Message
+                            ?? AppConst.Messages.MSG_RAW_RECORD_HEADER_REQUIRED,
+                        Stage = AppConst.IngestionStages.Mapping,
+                        ParserVersion = AppConst.RawLog.ParserVersion
+                    },
                     Retryable = false
                 }
             };
@@ -49,28 +60,15 @@ public sealed class CanonicalDeviceEventMapper : IRawRecordCanonicalMapper
                 CompanyId = result.Context.CompanyId,
                 OccurredAtUtc = occurredAtLocal?.ToUniversalTime(),
                 OccurredAtLocal = occurredAtLocal,
-                Source = new CanonicalDeviceEvent.SourceContext
-                {
-                    Producer = AppConst.RawLog.Producer,
-                    SourceId = result.Context.SourceId,
-                    FileId = result.Context.FileId,
-                    FileName = result.Context.FileName,
-                    RelativePath = result.Context.RelativePath,
-                    FolderDate = result.Context.FolderDate,
-                    OffsetStart = result.Context.OffsetStart,
-                    OffsetEnd = result.Context.OffsetEnd
-                },
+                TimelineAtUtc = occurredAtLocal?.ToUniversalTime(),
+                TimeBasis = occurredAtLocal is null ? null : AppConst.TimeBases.Occurred,
+                Source = CreateSourceContext(result.Context),
                 Device = new CanonicalDeviceEvent.DeviceContext
                 {
                     Id = header.DeviceId,
                     GateId = header.GateId
                 },
-                RawPayload = new CanonicalDeviceEvent.RawPayloadContext
-                {
-                    Format = AppConst.RawLog.PayloadFormat,
-                    Text = result.Context.RawPayloadText,
-                    Sha256 = EventIdentityFactory.ComputePayloadHash(result.Context)
-                },
+                RawPayload = CreateRawPayload(result.Context),
                 Facts = MapFacts(result.Context.FileId, parsed, result.Context),
                 Parse = new CanonicalDeviceEvent.ParseContext
                 {
@@ -84,6 +82,31 @@ public sealed class CanonicalDeviceEventMapper : IRawRecordCanonicalMapper
             }
         };
     }
+
+    private static CanonicalDeviceEvent.SourceContext CreateSourceContext(RawRecordContext context) =>
+        new()
+        {
+            Producer = AppConst.RawLog.Producer,
+            SourceId = context.SourceId,
+            Transport = AppConst.SourceTransports.File,
+            EventName = AppConst.RawLog.RecordEventName,
+            DeliveryKind = AppConst.DeliveryKinds.Activity,
+            FileId = context.FileId,
+            FileName = context.FileName,
+            RelativePath = context.RelativePath,
+            FolderDate = context.FolderDate,
+            OffsetStart = context.OffsetStart,
+            OffsetEnd = context.OffsetEnd
+        };
+
+    private static CanonicalDeviceEvent.RawPayloadContext CreateRawPayload(RawRecordContext context) =>
+        new()
+        {
+            Format = AppConst.RawLog.PayloadFormat,
+            Text = context.RawPayloadText,
+            Sha256 = EventIdentityFactory.ComputePayloadHash(context),
+            SizeBytes = context.RawPayloadBytes.LongLength
+        };
 
     private static CanonicalDeviceEvent.FactsContext MapFacts(
         long fileId,

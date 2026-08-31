@@ -65,9 +65,9 @@ public sealed class MongoPersistenceIntegrationTests
             var key = new IngestionCheckpointKey
             {
                 SourceId = deviceEvent.Source.SourceId,
-                FolderDate = deviceEvent.Source.FolderDate,
-                FileId = deviceEvent.Source.FileId,
-                RelativePath = deviceEvent.Source.RelativePath
+                FolderDate = deviceEvent.Source.FolderDate!.Value,
+                FileId = deviceEvent.Source.FileId!.Value,
+                RelativePath = deviceEvent.Source.RelativePath!
             };
             var initial = await checkpointStore.LoadAsync(key, CancellationToken.None);
             Assert.Null(initial);
@@ -77,10 +77,10 @@ public sealed class MongoPersistenceIntegrationTests
                 expectedVersion: 0,
                 new CheckpointAdvanceRequest
                 {
-                    Position = deviceEvent.Source.OffsetEnd,
+                    Position = deviceEvent.Source.OffsetEnd!.Value,
                     LastRecordHash = deviceEvent.RawPayload.Sha256,
                     LastEventId = deviceEvent.EventId,
-                    ObservedFileLength = deviceEvent.Source.OffsetEnd,
+                    ObservedFileLength = deviceEvent.Source.OffsetEnd!.Value,
                     WorkerId = "integration-test-worker",
                     UpdatedAtUtc = receivedAtUtc
                 },
@@ -93,7 +93,7 @@ public sealed class MongoPersistenceIntegrationTests
                 expectedVersion: 0,
                 new CheckpointAdvanceRequest
                 {
-                    Position = deviceEvent.Source.OffsetEnd + 10,
+                    Position = deviceEvent.Source.OffsetEnd!.Value + 10,
                     LastRecordHash = deviceEvent.RawPayload.Sha256,
                     LastEventId = deviceEvent.EventId,
                     WorkerId = "another-worker",

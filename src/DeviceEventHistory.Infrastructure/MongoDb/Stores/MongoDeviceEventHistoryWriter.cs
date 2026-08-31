@@ -27,7 +27,7 @@ public sealed class MongoDeviceEventHistoryWriter(
         var document = CanonicalDeviceEventDocumentMapper.ToDocument(
             deviceEvent,
             receivedAtUtc,
-            receivedAtUtc,
+            deviceEvent.PersistedAtUtc ?? receivedAtUtc,
             workerId);
         var startedAt = Stopwatch.GetTimestamp();
 

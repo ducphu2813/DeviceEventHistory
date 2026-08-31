@@ -1,5 +1,6 @@
 using DeviceEventHistory.Infrastructure.MongoDb.Configuration;
 using DeviceEventHistory.Infrastructure.RfidRawLog.Configuration;
+using DeviceEventHistory.Infrastructure.AppHub.Configuration;
 
 namespace DeviceEventHistory.Worker.Configuration;
 
@@ -12,19 +13,39 @@ public sealed record RedactedConfigurationSummary(
     string DatabaseName,
     string HistoryCollection,
     string FailureCollection,
-    string CheckpointCollection);
+    string CheckpointCollection,
+    bool AppHubEnabled,
+    IReadOnlyCollection<RedactedAppHubSourceSummary> AppHubSources);
+
+public sealed record RedactedAppHubSourceSummary(
+    string SourceId,
+    string EndpointHost,
+    int EnabledEventCount,
+    bool CredentialConfigured);
 
 public sealed class ConfigurationRedactor
 {
     public RedactedConfigurationSummary CreateSummary(
         WorkerOptions worker,
         RfidRawLogOptions rawLog,
-        MongoDbOptions mongo)
+        MongoDbOptions mongo,
+        AppHubOptions? appHub = null)
     {
-        var sourceIds = rawLog.Sources
+        var sourceIds = (rawLog.Sources ?? [])
             .Select(source => source.SourceId.Trim())
             .Where(sourceId => sourceId.Length > 0)
             .ToArray();
+
+        var appHubSources = appHub?.Sources
+            ?? [];
+        var redactedAppHubSources = appHubSources
+            .Select(source => new RedactedAppHubSourceSummary(
+                source.SourceId.Trim(),
+                GetEndpointHost(source.Endpoint),
+                source.EnabledEvents?.Count ?? 0,
+                HasCredentialConfigured(source)))
+            .ToArray()
+            ;
 
         return new RedactedConfigurationSummary(
             worker.Enabled,
@@ -35,6 +56,27 @@ public sealed class ConfigurationRedactor
             mongo.DatabaseName,
             mongo.HistoryCollection,
             mongo.FailureCollection,
-            mongo.CheckpointCollection);
+            mongo.CheckpointCollection,
+            appHub?.Enabled ?? false,
+            redactedAppHubSources);
+    }
+
+    private static string GetEndpointHost(string endpoint) =>
+        Uri.TryCreate(endpoint, UriKind.Absolute, out var uri)
+            ? uri.Host
+            : string.Empty;
+
+    private static bool HasCredentialConfigured(AppHubSourceOptions source)
+    {
+        var hasAccessToken = !string.IsNullOrWhiteSpace(source.AccessToken)
+            || (!string.IsNullOrWhiteSpace(source.AccessTokenEnvironmentVariable)
+                && !string.IsNullOrWhiteSpace(
+                    Environment.GetEnvironmentVariable(source.AccessTokenEnvironmentVariable)));
+        var hasJwtToken = !string.IsNullOrWhiteSpace(source.TokenJwt)
+            || (!string.IsNullOrWhiteSpace(source.TokenJwtEnvironmentVariable)
+                && !string.IsNullOrWhiteSpace(
+                    Environment.GetEnvironmentVariable(source.TokenJwtEnvironmentVariable)));
+
+        return hasAccessToken || hasJwtToken;
     }
 }

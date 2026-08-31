@@ -1,0 +1,12 @@
+using DeviceEventHistory.Domain.Common;
+
+namespace DeviceEventHistory.Application.AppHub.Mapping;
+
+public sealed class DeviceControlStateEventMapper(
+    AppHubTenantResolver tenantResolver,
+    string eventName) : AppHubOpaqueEventMapper(tenantResolver)
+{
+    public override string EventName => eventName;
+
+    protected override string Category => AppConst.Categories.DeviceControlState;
+}

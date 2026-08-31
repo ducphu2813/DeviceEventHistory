@@ -303,10 +303,10 @@ public sealed class WorkerOrchestrationTests
             CancellationToken cancellationToken)
         {
             var deviceEvent = processingResult.Event!;
-            PersistedOffsets.Add(deviceEvent.Source.OffsetEnd);
+            PersistedOffsets.Add(deviceEvent.Source.OffsetEnd!.Value);
             var updatedCheckpoint = checkpoint with
             {
-                Position = deviceEvent.Source.OffsetEnd,
+                Position = deviceEvent.Source.OffsetEnd!.Value,
                 Version = checkpoint.Version + 1,
                 LastEventId = deviceEvent.EventId,
                 LastRecordHash = deviceEvent.RawPayload.Sha256,

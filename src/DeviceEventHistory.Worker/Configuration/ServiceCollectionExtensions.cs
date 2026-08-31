@@ -2,8 +2,12 @@ using DeviceEventHistory.Application.Metadata;
 using DeviceEventHistory.Application.Observability;
 using DeviceEventHistory.Application.Parsing;
 using DeviceEventHistory.Application.Persistence;
+using DeviceEventHistory.Application.Ingestion;
+using DeviceEventHistory.Application.AppHub.Mapping;
 using DeviceEventHistory.Domain.Common;
 using DeviceEventHistory.Infrastructure.Metadata;
+using DeviceEventHistory.Infrastructure.AppHub.Configuration;
+using DeviceEventHistory.Infrastructure.AppHub.Transport;
 using DeviceEventHistory.Infrastructure.MongoDb;
 using DeviceEventHistory.Infrastructure.MongoDb.Configuration;
 using DeviceEventHistory.Infrastructure.MongoDb.Execution;
@@ -62,6 +66,8 @@ public static class ServiceCollectionExtensions
             .ValidateOnStart();
         services.AddSingleton<IValidateOptions<ObservabilityOptions>, ObservabilityOptionsValidator>();
 
+        services.AddErpAppHubIngestion(configuration);
+
         services.AddSingleton<ConfigurationRedactor>();
         services.AddSingleton<ConfigurationDeviceMetadataResolver>(serviceProvider =>
             new ConfigurationDeviceMetadataResolver(
@@ -79,7 +85,17 @@ public static class ServiceCollectionExtensions
                 options.SourceFailureUnhealthyThreshold,
                 options.ProgressStaleAfter);
         });
-        services.AddSingleton<IngestionMetrics>();
+        services.AddSingleton<AppHubHealthState>(serviceProvider =>
+        {
+            var options = serviceProvider.GetRequiredService<IOptions<ObservabilityOptions>>().Value;
+            return new AppHubHealthState(
+                serviceProvider.GetRequiredService<TimeProvider>(),
+                options.SourceFailureUnhealthyThreshold);
+        });
+        services.AddSingleton<IngestionMetrics>(serviceProvider =>
+            new IngestionMetrics(
+                serviceProvider.GetRequiredService<IngestionHealthState>(),
+                serviceProvider.GetRequiredService<AppHubHealthState>()));
         services.AddSingleton<IIngestionTelemetry>(serviceProvider =>
             serviceProvider.GetRequiredService<IngestionMetrics>());
         services.AddSingleton<IRawLogSourceFileDiscovery, LocalRawLogFileDiscovery>();
@@ -114,6 +130,11 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IRfidRawRecordParser, RfidRawRecordParser>();
         services.AddSingleton<IRawRecordCanonicalMapper, CanonicalDeviceEventMapper>();
         services.AddSingleton<IProcessRawFileRecordHandler, ProcessRawFileRecordHandler>();
+        services.AddSingleton<UnmappedRawSourceEventMapper>();
+        services.AddSingleton<RawSourceEventMapperRegistry>(serviceProvider =>
+            new RawSourceEventMapperRegistry(
+                serviceProvider.GetServices<IRawSourceEventMapper>(),
+                serviceProvider.GetRequiredService<UnmappedRawSourceEventMapper>()));
 
         services.AddSingleton<MongoDbContext>(serviceProvider =>
             new MongoDbContext(
@@ -125,6 +146,7 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<MongoIndexInitializer>();
         services.AddSingleton<IDeviceEventHistoryWriter, MongoDeviceEventHistoryWriter>();
         services.AddSingleton<IIngestionFailureWriter, MongoIngestionFailureWriter>();
+        services.AddSingleton<ICanonicalIngestionPersistenceService, CanonicalIngestionPersistenceService>();
         services.AddSingleton<IIngestionCheckpointStore, MongoIngestionCheckpointStore>();
         services.AddSingleton<IRawRecordPersistenceCoordinator, RawRecordPersistenceCoordinator>();
 
@@ -149,9 +171,64 @@ public static class ServiceCollectionExtensions
         services.AddHealthChecks()
             .AddCheck<MongoDbHealthCheck>(AppConst.Observability.MongoHealthCheckName)
             .AddCheck<SourcePathHealthCheck>(AppConst.Observability.SourceHealthCheckName)
-            .AddCheck<IngestionProgressHealthCheck>(AppConst.Observability.IngestionHealthCheckName);
+            .AddCheck<IngestionProgressHealthCheck>(AppConst.Observability.IngestionHealthCheckName)
+            .AddCheck<AppHubHealthCheck>(AppConst.Observability.AppHubHealthCheckName);
         services.AddHostedService<StartupInitializationHostedService>();
+        services.AddHostedService<ErpAppHubMonitoringHostedService>();
 
+        return services;
+    }
+
+    public static IServiceCollection AddErpAppHubIngestion(
+        this IServiceCollection services,
+        IConfiguration configuration)
+    {
+        services.AddOptions<AppHubOptions>()
+            .Bind(configuration.GetSection(AppHubOptions.SectionName))
+            .ValidateOnStart();
+        services.AddSingleton<IValidateOptions<AppHubOptions>, AppHubOptionsValidator>();
+        services.AddSingleton<IAppHubMonitoringConnectionFactory, AppHubMonitoringConnectionFactory>();
+        services.AddSingleton<AppHubCallbackRegistrar>();
+        services.AddSingleton<IAppHubSourceConfigurationProvider>(serviceProvider =>
+            new AppHubSourceConfigurationProvider(
+                serviceProvider.GetRequiredService<IOptions<AppHubOptions>>().Value.Sources
+                    .Select(source => new AppHubSourceMappingOptions(
+                        source.SourceId,
+                        source.CompanyId,
+                        source.DedicatedSingleTenant))));
+        services.AddSingleton<AppHubTenantResolver>();
+        services.AddSingleton<IRawSourceEventMapper, DeviceOnlineEventMapper>();
+        services.AddSingleton<IRawSourceEventMapper, DeviceConnectionEventMapper>();
+        services.AddSingleton<IRawSourceEventMapper>(serviceProvider =>
+            new DeviceControlStateEventMapper(
+                serviceProvider.GetRequiredService<AppHubTenantResolver>(),
+                AppConst.AppHub.Callbacks.ReceiveGreenState));
+        services.AddSingleton<IRawSourceEventMapper>(serviceProvider =>
+            new DeviceControlStateEventMapper(
+                serviceProvider.GetRequiredService<AppHubTenantResolver>(),
+                AppConst.AppHub.Callbacks.ReceiveRedState));
+        services.AddSingleton<IRawSourceEventMapper, DeviceSensorStateEventMapper>();
+        services.AddSingleton<IRawSourceEventMapper, DeviceReadTagEventMapper>();
+        services.AddSingleton<IRawSourceEventMapper>(serviceProvider =>
+            new ScannerEventMapper(
+                serviceProvider.GetRequiredService<AppHubTenantResolver>(),
+                AppConst.AppHub.Callbacks.ReceiveDeviceScanConnect));
+        services.AddSingleton<IRawSourceEventMapper>(serviceProvider =>
+            new ScannerEventMapper(
+                serviceProvider.GetRequiredService<AppHubTenantResolver>(),
+                AppConst.AppHub.Callbacks.ReceiveDeviceScanDisconnect));
+        services.AddSingleton<IRawSourceEventMapper>(serviceProvider =>
+            new ScannerEventMapper(
+                serviceProvider.GetRequiredService<AppHubTenantResolver>(),
+                AppConst.AppHub.Callbacks.ReceiveRequestDeviceScanInfoOnline));
+        services.AddSingleton<IRawSourceEventMapper>(serviceProvider =>
+            new ClientDeviceConnectionEventMapper(
+                serviceProvider.GetRequiredService<AppHubTenantResolver>(),
+                AppConst.AppHub.Callbacks.ReceiveClientDeviceConnected));
+        services.AddSingleton<IRawSourceEventMapper>(serviceProvider =>
+            new ClientDeviceConnectionEventMapper(
+                serviceProvider.GetRequiredService<AppHubTenantResolver>(),
+                AppConst.AppHub.Callbacks.ReceiveClientDeviceDisconnected));
         return services;
     }
 }

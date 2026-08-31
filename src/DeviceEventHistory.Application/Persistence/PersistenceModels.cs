@@ -79,6 +79,14 @@ public sealed record CheckpointAdvanceResult(
 
 public sealed record PersistenceWriteResult(string Identity, bool WasAlreadyPersisted);
 
+public sealed record CanonicalIngestionPersistenceOutcome(
+    string PersistedIdentity,
+    bool WasFailure,
+    bool WasAlreadyPersisted,
+    DateTimeOffset ReceivedAtUtc,
+    DateTimeOffset PersistedAtUtc,
+    long ProcessingDurationMs);
+
 public sealed record RawRecordPersistenceOutcome(
     string PersistedIdentity,
     bool WasFailure,

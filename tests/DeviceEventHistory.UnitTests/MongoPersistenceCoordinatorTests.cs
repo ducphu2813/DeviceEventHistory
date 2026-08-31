@@ -1,7 +1,9 @@
 using DeviceEventHistory.Application.Parsing;
 using DeviceEventHistory.Application.Persistence;
+using DeviceEventHistory.Application.Ingestion;
 using DeviceEventHistory.Domain.Common;
 using DeviceEventHistory.Domain.Events;
+using DeviceEventHistory.Domain.Failures;
 
 namespace DeviceEventHistory.UnitTests;
 
@@ -13,9 +15,12 @@ public sealed class MongoPersistenceCoordinatorTests
         var calls = new List<string>();
         var historyWriter = new RecordingHistoryWriter(calls);
         var checkpointStore = new RecordingCheckpointStore(calls, CheckpointAdvanceStatus.Advanced);
-        var coordinator = new RawRecordPersistenceCoordinator(
+        var persistenceService = new CanonicalIngestionPersistenceService(
             historyWriter,
             new NoopFailureWriter(),
+            TimeProvider.System);
+        var coordinator = new RawRecordPersistenceCoordinator(
+            persistenceService,
             checkpointStore,
             TimeProvider.System);
 
@@ -35,9 +40,12 @@ public sealed class MongoPersistenceCoordinatorTests
     public async Task Does_not_report_confirmed_when_checkpoint_cas_conflicts()
     {
         var checkpointStore = new RecordingCheckpointStore([], CheckpointAdvanceStatus.Conflict);
-        var coordinator = new RawRecordPersistenceCoordinator(
+        var persistenceService = new CanonicalIngestionPersistenceService(
             new RecordingHistoryWriter([]),
             new NoopFailureWriter(),
+            TimeProvider.System);
+        var coordinator = new RawRecordPersistenceCoordinator(
+            persistenceService,
             checkpointStore,
             TimeProvider.System);
 
@@ -114,7 +122,7 @@ public sealed class MongoPersistenceCoordinatorTests
     private sealed class NoopFailureWriter : IIngestionFailureWriter
     {
         public Task<PersistenceWriteResult> WriteAsync(
-            RawRecordProcessingResult.CanonicalIngestionFailure failure,
+            CanonicalIngestionFailure failure,
             DateTimeOffset receivedAtUtc,
             string workerId,
             CancellationToken cancellationToken) =>

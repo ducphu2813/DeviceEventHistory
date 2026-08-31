@@ -5,6 +5,7 @@ using DeviceEventHistory.Domain.Common;
 using DeviceEventHistory.Infrastructure.MongoDb.Execution;
 using DeviceEventHistory.Infrastructure.MongoDb.Mapping;
 using DeviceEventHistory.Application.Parsing;
+using DeviceEventHistory.Domain.Failures;
 using MongoDB.Driver;
 
 namespace DeviceEventHistory.Infrastructure.MongoDb.Stores;
@@ -15,7 +16,7 @@ public sealed class MongoIngestionFailureWriter(
     IIngestionTelemetry? telemetry = null) : IIngestionFailureWriter
 {
     public async Task<PersistenceWriteResult> WriteAsync(
-        RawRecordProcessingResult.CanonicalIngestionFailure failure,
+        CanonicalIngestionFailure failure,
         DateTimeOffset receivedAtUtc,
         string workerId,
         CancellationToken cancellationToken)

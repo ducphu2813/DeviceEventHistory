@@ -16,6 +16,7 @@ public static class AppConst
         public const string MongoDbSection = DatabaseSettingsSection + ":MongoDb";
         public const string IngestionSection = RootSection + ":Ingestion";
         public const string ObservabilitySection = RootSection + ":Observability";
+        public const string AppHubSection = RootSection + ":AppHub";
     }
 
     public static class EnvironmentVariables
@@ -47,6 +48,10 @@ public static class AppConst
         public const int MongoFailureUnhealthyThreshold = 3;
         public const int SourceFailureUnhealthyThreshold = 3;
         public const int ProgressStaleMinutes = 5;
+        public const int AppHubChannelCapacity = 5_000;
+        public const int AppHubEnqueueTimeoutMilliseconds = 100;
+        public const int AppHubReconnectMinDelaySeconds = 1;
+        public const int AppHubReconnectMaxDelaySeconds = 30;
     }
 
     public static class RawLog
@@ -56,6 +61,7 @@ public static class AppConst
         public const string Producer = "RFID.Antenna";
         public const string SourceKind = "rfid_antenna_file";
         public const string PayloadFormat = "rfid-raw-v1";
+        public const string RecordEventName = "raw_record";
         public const string RelativePathDateFormat = "yyyy/MM/dd";
         public const string HeaderBlock = "@";
         public const string GateStateBlock = "b";
@@ -81,6 +87,78 @@ public static class AppConst
         public const string FileNameRegex = @"^File_(?<fileId>\d+)\.txt$";
     }
 
+    public static class AppHub
+    {
+        public const string Producer = "ERP.AppHub";
+        public const string SourceKind = SourceKinds.ErpAppHub;
+        public const string Transport = SourceTransports.ClassicSignalR;
+        public const string DeliveryKind = DeliveryKinds.Realtime;
+        public const string ParserVersion = "erp-apphub-v1";
+        public const string PayloadFormat = "signalr-arguments-json-v1";
+        public const string DefaultHubName = "AppHub";
+        public const string JoinMonitoringMethod = "JoinMonitoring";
+
+        public static class UserState
+        {
+            public const string ConnectionId = "ConnectionId";
+            public const string ConnectionIdHash = "ConnectionIdHash";
+            public const string CompanyId = "CompanyId";
+            public const string UserId = "UserId";
+            public const string DateConnected = "DateConnected";
+            public const string SessionType = "SessionType";
+            public const string DeviceType = "DeviceType";
+            public const string DeviceId = "DeviceId";
+            public const string DeviceName = "DeviceName";
+            public const string GateId = "GateId";
+            public const string GateName = "GateName";
+
+            public static IReadOnlySet<string> SensitiveFields { get; } =
+                new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+                {
+                    "UserName",
+                    "Avatar",
+                    "WindowFocus",
+                    "ModuleName",
+                    "Browser",
+                    "Ip",
+                    "SessionId",
+                    "UserId2",
+                    "WantFollowForViewUserState"
+                };
+        }
+
+        public static class Callbacks
+        {
+            public const string ReceiveDeviceOnline = "receiveDeviceOnline";
+            public const string ReceiveStateConnected = "receiveStateConnected";
+            public const string ReceiveGreenState = "receiveGreenState";
+            public const string ReceiveRedState = "receiveRedState";
+            public const string ReceiveTimeSensor = "receiveTimeSensor";
+            public const string ReceiveDeviceReadTag = "receiveDeviceReadTag";
+            public const string ReceiveDeviceScanConnect = "receiveDeviceScanConnect";
+            public const string ReceiveDeviceScanDisconnect = "receiveDeviceScanDisconnect";
+            public const string ReceiveClientDeviceConnected = "receiveClientDeviceConnected";
+            public const string ReceiveClientDeviceDisconnected = "receiveClientDeviceDisconnected";
+            public const string ReceiveRequestDeviceScanInfoOnline = "receiveRequestDeviceScanInfoOnline";
+
+            public static IReadOnlySet<string> Registered { get; } =
+                new HashSet<string>(StringComparer.Ordinal)
+                {
+                    ReceiveDeviceOnline,
+                    ReceiveStateConnected,
+                    ReceiveGreenState,
+                    ReceiveRedState,
+                    ReceiveTimeSensor,
+                    ReceiveDeviceReadTag,
+                    ReceiveDeviceScanConnect,
+                    ReceiveDeviceScanDisconnect,
+                    ReceiveClientDeviceConnected,
+                    ReceiveClientDeviceDisconnected,
+                    ReceiveRequestDeviceScanInfoOnline
+                };
+        }
+    }
+
     public static class MongoDb
     {
         public const string DefaultDatabaseName = "device_event_history";
@@ -98,8 +176,20 @@ public static class AppConst
         public const string HistoryCategoryOccurredAtIndexName = "ix_category_occurred_at_utc_desc";
         public const string HistoryParseReceivedAtIndexName = "ix_parse_received_at_utc_desc";
         public const string HistorySourceOffsetIndexName = "ix_source_file_offset";
+        public const string HistoryCompanyTimelineIndexName = "ix_company_timeline_at_utc_desc";
+        public const string HistoryCompanyCategoryTimelineIndexName = "ix_company_category_timeline_at_utc_desc";
+        public const string HistorySourceKindReceivedAtIndexName = "ix_source_kind_received_at_utc_desc";
+        public const string HistorySourceReceivedAtIndexName = "ix_source_received_at_utc_desc";
+        public const string HistoryEventNameReceivedAtIndexName = "ix_event_name_received_at_utc_desc";
+        public const string HistoryDeviceTimelineIndexName = "ix_device_timeline_at_utc_desc";
+        public const string HistoryGateTimelineIndexName = "ix_gate_timeline_at_utc_desc";
+        public const string HistoryTagTimelineIndexName = "ix_tag_timeline_at_utc_desc";
+        public const string HistoryParseStatusReceivedAtV2IndexName = "ix_parse_status_received_at_utc_desc_v2";
+        public const string HistorySourceOffsetV2IndexName = "ix_source_file_offset_v2";
         public const string FailureSourceOffsetIndexName = "ix_source_file_offset";
         public const string FailureCodeReceivedAtIndexName = "ix_error_code_received_at_utc_desc";
+        public const string FailureSourceErrorReceivedAtIndexName = "ix_source_error_received_at_utc_desc";
+        public const string FailureSourceOffsetV2IndexName = "ix_source_file_offset_v2";
         public const string FailureResolvedAtIndexName = "ix_resolved_at_utc";
         public const string CheckpointSourceIdentityIndexName = "ux_source_folder_file_path";
         public const string CheckpointUpdatedAtIndexName = "ix_updated_at_utc_desc";
@@ -133,6 +223,26 @@ public static class AppConst
             "Raw-log ingestion orchestration started.";
         public const string IngestionStoppedMessage =
             "Raw-log ingestion orchestration stopped.";
+        public const string AppHubIngestionStartedMessage =
+            "ERP AppHub ingestion orchestration started with SourceCount={SourceCount}.";
+        public const string AppHubIngestionStoppedMessage =
+            "ERP AppHub ingestion orchestration stopped.";
+        public const string AppHubSourceConnectionFailedMessage =
+            "ERP AppHub source connection failed for SourceId={SourceId}.";
+        public const string AppHubSourceConnectedMessage =
+            "ERP AppHub source connected and joined Monitoring for SourceId={SourceId}, Generation={Generation}.";
+        public const string AppHubSourceDisconnectedMessage =
+            "ERP AppHub source disconnected for SourceId={SourceId}.";
+        public const string AppHubSourceReconnectScheduledMessage =
+            "ERP AppHub reconnect scheduled for SourceId={SourceId}, Attempt={Attempt}, Delay={Delay}.";
+        public const string AppHubCallbackDroppedMessage =
+            "ERP AppHub callback was dropped after bounded admission for SourceId={SourceId}, EventName={EventName}, Reason={Reason}.";
+        public const string AppHubCallbackProcessingFailedMessage =
+            "ERP AppHub callback processing failed for SourceId={SourceId}, EventName={EventName}.";
+        public const string AppHubChannelDrainTimeoutMessage =
+            "ERP AppHub channel drain timed out for SourceId={SourceId}, RemainingCount={RemainingCount}.";
+        public const string AppHubChannelDrainedMessage =
+            "ERP AppHub channel drained for SourceId={SourceId}, ProcessedCount={ProcessedCount}.";
         public const string SchedulerStartedMessage =
             "Raw-log scheduler started with ConsumerCount={ConsumerCount}.";
         public const string FileTurnStartedMessage =
@@ -248,6 +358,98 @@ public static class AppConst
             "Checkpoint version conflict was detected for '{0}'.";
         public const string MSG_PERSISTENCE_OUTCOME_REQUIRED =
             "A raw record processing result must contain an event or failure.";
+        public const string MSG_CANONICAL_INGESTION_OUTCOME_REQUIRED =
+            "A canonical ingestion result must contain an event or failure.";
+        public const string MSG_CANONICAL_INGESTION_OUTCOME_EXCLUSIVE =
+            "A canonical ingestion result cannot contain both an event and a failure.";
+        public const string MSG_RAW_SOURCE_EVENT_MAPPER_KEY_DUPLICATED =
+            "A raw source event mapper is already registered for key '{0}'.";
+        public const string MSG_RAW_SOURCE_EVENT_UNMAPPED =
+            "No canonical mapper is registered for source kind '{0}' and event '{1}'.";
+        public const string MSG_APPHUB_SOURCES_REQUIRED =
+            "At least one AppHub source is required when AppHub is enabled.";
+        public const string MSG_APPHUB_SOURCE_ID_REQUIRED =
+            "{0}.SourceId is required.";
+        public const string MSG_APPHUB_SOURCE_ID_DUPLICATED =
+            "{0}.SourceId '{1}' is duplicated across ingestion sources.";
+        public const string MSG_APPHUB_ENDPOINT_REQUIRED =
+            "{0}.Endpoint is required.";
+        public const string MSG_APPHUB_ENDPOINT_INVALID =
+            "{0}.Endpoint must be an absolute HTTP or HTTPS URL without user-info, query or fragment.";
+        public const string MSG_APPHUB_HUB_NAME_REQUIRED =
+            "{0}.HubName is required.";
+        public const string MSG_APPHUB_HUB_NAME_INVALID =
+            "{0}.HubName contains unsupported characters.";
+        public const string MSG_APPHUB_COMPANY_ID_POSITIVE =
+            "{0}.CompanyId must be null or greater than zero.";
+        public const string MSG_APPHUB_DEDICATED_COMPANY_REQUIRED =
+            "{0}.CompanyId must be greater than zero when DedicatedSingleTenant is enabled.";
+        public const string MSG_APPHUB_CHANNEL_CAPACITY_POSITIVE =
+            "{0}.ChannelCapacity must be greater than zero.";
+        public const string MSG_APPHUB_ENQUEUE_TIMEOUT_POSITIVE =
+            "{0}.EnqueueTimeout must be greater than zero.";
+        public const string MSG_APPHUB_RECONNECT_MIN_DELAY_POSITIVE =
+            "{0}.ReconnectMinDelay must be greater than zero.";
+        public const string MSG_APPHUB_RECONNECT_MAX_DELAY_POSITIVE =
+            "{0}.ReconnectMaxDelay must be greater than zero.";
+        public const string MSG_APPHUB_RECONNECT_DELAY_RANGE_INVALID =
+            "{0}.ReconnectMinDelay cannot be greater than ReconnectMaxDelay.";
+        public const string MSG_APPHUB_ENABLED_EVENTS_REQUIRED =
+            "{0}.EnabledEvents must contain at least one registered callback.";
+        public const string MSG_APPHUB_EVENT_UNSUPPORTED =
+            "{0}.EnabledEvents contains unsupported callback '{1}'.";
+        public const string MSG_APPHUB_EVENT_DUPLICATED =
+            "{0}.EnabledEvents contains duplicate callback '{1}'.";
+        public const string MSG_APPHUB_CREDENTIAL_ENVIRONMENT_VARIABLE_REQUIRED =
+            "{0} must configure AccessToken/TokenJwt or an approved token environment variable.";
+        public const string MSG_APPHUB_CREDENTIAL_VALUE_REQUIRED =
+            "No configured AppHub service credential was found in direct configuration or the approved environment variable.";
+        public const string MSG_APPHUB_PAYLOAD_TOO_LARGE =
+            "AppHub callback payload size {0} bytes exceeds the configured maximum of {1} bytes.";
+        public const string MSG_APPHUB_RUNTIME_SOURCE_REQUIRED =
+            "An AppHub source is required to create a source runtime.";
+        public const string MSG_APPHUB_RUNTIME_ALREADY_STARTED =
+            "The AppHub source runtime has already started.";
+        public const string MSG_APPHUB_PAYLOAD_JSON_INVALID =
+            "AppHub callback payload is not valid JSON.";
+        public const string MSG_APPHUB_PAYLOAD_ARGUMENT_REQUIRED =
+            "AppHub callback payload must contain a JSON object argument.";
+        public const string MSG_APPHUB_TENANT_MISMATCH =
+            "AppHub payload CompanyId {0} does not match configured CompanyId {1}.";
+        public const string MSG_APPHUB_TENANT_UNRESOLVED =
+            "AppHub CompanyId cannot be resolved.";
+        public const string MSG_APPHUB_REQUIRED_FIELD_MISSING =
+            "AppHub callback '{0}' is missing required field '{1}'.";
+        public const string MSG_APPHUB_SOURCE_MAPPING_ID_REQUIRED =
+            "AppHub source mapping options require a SourceId.";
+        public const string MSG_APPHUB_SOURCE_MAPPING_ID_DUPLICATED =
+            "AppHub source mapping options are duplicated for '{0}'.";
+        public const string MSG_APPHUB_CALLBACK_NAME_REQUIRED =
+            "AppHub callback name is required.";
+        public const string MSG_APPHUB_CALLBACK_REGISTERED_AFTER_START =
+            "AppHub callbacks must be registered before the connection starts.";
+        public const string MSG_APPHUB_CONNECTION_ALREADY_STARTED =
+            "The AppHub connection has already started.";
+        public const string MSG_APPHUB_PROXY_REQUIRED =
+            "The AppHub hub proxy is not initialized.";
+        public const string MSG_RAW_RECORD_FILE_SOURCE_CONTEXT_REQUIRED =
+            "Raw-record persistence requires a complete file source context.";
+        public const string MSG_RAW_LOG_FAILURE_COMPANY_ID_REQUIRED =
+            "Raw-log failure persistence requires a company ID.";
+        public const string MSG_RAW_LOG_FAILURE_FILE_ID_REQUIRED =
+            "Raw-log failure persistence requires a file ID.";
+        public const string MSG_RAW_LOG_FAILURE_FILE_NAME_REQUIRED =
+            "Raw-log failure persistence requires a file name.";
+        public const string MSG_RAW_LOG_FAILURE_RELATIVE_PATH_REQUIRED =
+            "Raw-log failure persistence requires a relative path.";
+        public const string MSG_RAW_LOG_FAILURE_FOLDER_DATE_REQUIRED =
+            "Raw-log failure persistence requires a folder date.";
+        public const string MSG_RAW_LOG_FAILURE_START_OFFSET_REQUIRED =
+            "Raw-log failure persistence requires a start offset.";
+        public const string MSG_RAW_LOG_FAILURE_END_OFFSET_REQUIRED =
+            "Raw-log failure persistence requires an end offset.";
+        public const string MSG_RAW_LOG_FAILURE_RAW_TEXT_REQUIRED =
+            "Raw-log failure persistence requires raw text.";
         public const string MSG_CHECKPOINT_CONFIRMATION_REQUIRED =
             "Checkpoint advance was not confirmed after persistence.";
         public const string MSG_RAW_LOG_STATE_STOPPED =
@@ -280,17 +482,100 @@ public static class AppConst
     {
         public const string TagRead = "tag_read";
         public const string BusinessProcess = "business_process";
+        public const string GateState = "gate_state";
+        public const string DeviceOnline = "device_online";
+        public const string DeviceConnection = "device_connection";
+        public const string ScannerConnection = "scanner_connection";
+        public const string ClientDeviceConnection = "client_device_connection";
+        public const string DeviceControlState = "device_control_state";
+        public const string DeviceSensorState = "device_sensor_state";
+        public const string DeviceSnapshot = "device_snapshot";
+        public const string DeviceError = "device_error";
+        public const string ApplicationError = "application_error";
         public const string Unknown = "unknown";
+    }
+
+    public static class SourceKinds
+    {
+        public const string RfidAntennaFile = "rfid_antenna_file";
+        public const string ErpAppHub = "erp_apphub";
+        public const string DirectPublisher = "direct_publisher";
+        public const string ScannerApplication = "scanner_application";
+        public const string ApplicationLog = "application_log";
+    }
+
+    public static class SchemaVersions
+    {
+        public const int CanonicalV2 = 2;
+    }
+
+    public static class SourceTransports
+    {
+        public const string File = "file";
+        public const string HttpRange = "http_range";
+        public const string ClassicSignalR = "classic_signalr";
+        public const string Http = "http";
+        public const string MessageBroker = "message_broker";
+        public const string ApplicationLog = "application_log";
+    }
+
+    public static class DeliveryKinds
+    {
+        public const string Activity = "activity";
+        public const string Realtime = "realtime";
+        public const string Snapshot = "snapshot";
+        public const string SnapshotCandidate = "snapshot_candidate";
+        public const string ReconnectSnapshot = "reconnect_snapshot";
+        public const string Heartbeat = "heartbeat";
+        public const string Unknown = "unknown";
+    }
+
+    public static class TimeBases
+    {
+        public const string Occurred = "occurred";
+        public const string Received = "received";
+    }
+
+    public static class CanonicalValues
+    {
+        public const string ConnectionStatusConnected = "connected";
+        public const string ConnectionStatusDisconnected = "disconnected";
+        public const string ConnectionStatusUnknown = "unknown";
+        public const string ScannerDeviceType = "scanner";
+    }
+
+    public static class IngestionStages
+    {
+        public const string Admission = "admission";
+        public const string Framing = "framing";
+        public const string Deserialization = "deserialization";
+        public const string Validation = "validation";
+        public const string MetadataResolution = "metadata_resolution";
+        public const string Mapping = "mapping";
+        public const string PersistenceContract = "persistence_contract";
     }
 
     public static class Parsing
     {
         public const string StatusParsed = "parsed";
         public const string StatusParsedWithWarnings = "parsed_with_warnings";
+        public const string StatusUnmapped = "unmapped";
+        public const string StatusFailure = "failure";
         public const string InvalidRecordFormat = "INVALID_RECORD_FORMAT";
         public const string InvalidRawBlock = "INVALID_RAW_BLOCK";
         public const string UnknownRawBlock = "UNKNOWN_RAW_BLOCK";
         public const string InvalidSourceTimeZone = "INVALID_SOURCE_TIME_ZONE";
+        public const string TenantMismatch = "TENANT_MISMATCH";
+        public const string TenantUnresolved = "TENANT_UNRESOLVED";
+        public const string PayloadTooLarge = "PAYLOAD_TOO_LARGE";
+        public const string UnknownSourceEvent = "UNKNOWN_SOURCE_EVENT";
+        public const string AppHubOpaqueContractUnconfirmed = "APPHUB_OPAQUE_CONTRACT_UNCONFIRMED";
+        public const string SourceTimeMissing = "SOURCE_TIME_MISSING";
+        public const string SourceTimeUntrusted = "SOURCE_TIME_UNTRUSTED";
+        public const string OptionalFieldMissing = "OPTIONAL_FIELD_MISSING";
+        public const string ScannerConnectionIdMissing = "SCANNER_CONNECTION_ID_MISSING";
+        public const string PayloadSizeBytesDetail = "payload_size_bytes";
+        public const string MaximumPayloadBytesDetail = "maximum_payload_bytes";
     }
 
     public static class Observability
@@ -300,6 +585,7 @@ public static class AppConst
         public const string MongoHealthCheckName = "mongodb";
         public const string SourceHealthCheckName = "raw-log-source";
         public const string IngestionHealthCheckName = "ingestion-progress";
+        public const string AppHubHealthCheckName = "apphub";
         public const string HealthStatusReady = "ready";
         public const string HealthStatusDegraded = "degraded";
         public const string HealthStatusUnhealthy = "unhealthy";
@@ -308,6 +594,12 @@ public static class AppConst
         public const string HealthReasonSourceUnavailable = "source_unavailable";
         public const string HealthReasonFileTruncated = "file_truncated";
         public const string HealthReasonProgressStale = "progress_stale";
+        public const string HealthReasonAppHubConnecting = "apphub_connecting";
+        public const string HealthReasonAppHubDegraded = "apphub_degraded";
+        public const string HealthReasonAppHubUnavailable = "apphub_unavailable";
+        public const string AppHubAdmissionEnqueueTimeout = "enqueue_timeout";
+        public const string AppHubAdmissionChannelClosed = "channel_closed";
+        public const string AppHubAdmissionSerializationFailed = "serialization_failed";
         public const string OperationMongo = "mongodb.operation";
         public const string OperationHistoryWrite = "history.write";
         public const string OperationFailureWrite = "failure.write";
@@ -332,11 +624,26 @@ public static class AppConst
         public const string MetricIngestionLagBytes = "device_event_history.ingestion.lag_bytes";
         public const string MetricOversizedRecords = "device_event_history.records.oversized";
         public const string MetricTruncatedFiles = "device_event_history.files.truncated";
+        public const string MetricAppHubCallbacksReceived = "device_event_history.apphub.callbacks.received";
+        public const string MetricAppHubCallbacksAdmitted = "device_event_history.apphub.callbacks.admitted";
+        public const string MetricAppHubCallbacksDropped = "device_event_history.apphub.callbacks.dropped";
+        public const string MetricAppHubConnectionAttempts = "device_event_history.apphub.connection_attempts";
+        public const string MetricAppHubConnectionStates = "device_event_history.apphub.connection_states";
+        public const string MetricAppHubReconnects = "device_event_history.apphub.reconnects";
+        public const string MetricAppHubJoins = "device_event_history.apphub.joins";
+        public const string MetricAppHubChannelDepth = "device_event_history.apphub.channel.depth";
+        public const string MetricAppHubChannelSaturations = "device_event_history.apphub.channel.saturations";
+        public const string MetricAppHubMappingResults = "device_event_history.apphub.mapping.results";
+        public const string MetricAppHubLastCallbackAge = "device_event_history.apphub.last_callback_age";
+        public const string MetricAppHubLastSuccessfulJoinAge = "device_event_history.apphub.last_successful_join_age";
         public const string TagSourceId = "source_id";
         public const string TagMode = "mode";
         public const string TagFileId = "file_id";
         public const string TagStatus = "status";
         public const string TagOperation = "operation";
+        public const string TagEventName = "event_name";
+        public const string TagReason = "reason";
+        public const string TagState = "state";
         public const string ResultCanceled = "canceled";
         public const string ResultHistory = "history";
         public const string ResultFailure = "failure";
@@ -353,5 +660,7 @@ public static class AppConst
             "Ingestion loop is not live.";
         public const string HealthIngestionStatusDescription =
             "Ingestion status is {0}; reason={1}.";
+        public const string HealthAppHubStatusDescription =
+            "AppHub status is {0}; reason={1}.";
     }
 }
