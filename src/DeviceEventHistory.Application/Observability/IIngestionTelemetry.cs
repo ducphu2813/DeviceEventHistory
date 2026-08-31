@@ -49,4 +49,18 @@ public interface IIngestionTelemetry
     void RecordAppHubCallbackAdmitted(string sourceId, string eventName);
 
     void RecordAppHubCallbackDropped(string sourceId, string eventName, string reason);
+
+    void RecordAppHubConnectionAttempt(string sourceId);
+
+    void RecordAppHubConnectionState(string sourceId, string state);
+
+    void RecordAppHubReconnect(string sourceId);
+
+    void RecordAppHubJoin(string sourceId, bool succeeded);
+
+    void RecordAppHubChannelDepth(string sourceId, int depth);
+
+    void RecordAppHubChannelSaturation(string sourceId);
+
+    void RecordAppHubMappingResult(string sourceId, string status);
 }

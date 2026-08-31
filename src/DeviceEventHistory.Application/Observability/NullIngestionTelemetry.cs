@@ -95,4 +95,32 @@ public sealed class NullIngestionTelemetry : IIngestionTelemetry
     public void RecordAppHubCallbackDropped(string sourceId, string eventName, string reason)
     {
     }
+
+    public void RecordAppHubConnectionAttempt(string sourceId)
+    {
+    }
+
+    public void RecordAppHubConnectionState(string sourceId, string state)
+    {
+    }
+
+    public void RecordAppHubReconnect(string sourceId)
+    {
+    }
+
+    public void RecordAppHubJoin(string sourceId, bool succeeded)
+    {
+    }
+
+    public void RecordAppHubChannelDepth(string sourceId, int depth)
+    {
+    }
+
+    public void RecordAppHubChannelSaturation(string sourceId)
+    {
+    }
+
+    public void RecordAppHubMappingResult(string sourceId, string status)
+    {
+    }
 }

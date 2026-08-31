@@ -22,6 +22,7 @@ public sealed class ErpAppHubMonitoringHostedService(
     ICanonicalIngestionPersistenceService persistenceService,
     TimeProvider timeProvider,
     IngestionHealthState healthState,
+    AppHubHealthState appHubHealthState,
     ILoggerFactory loggerFactory,
     IIngestionTelemetry? telemetry = null) : BackgroundService
 {
@@ -51,7 +52,8 @@ public sealed class ErpAppHubMonitoringHostedService(
                 timeProvider,
                 healthState,
                 loggerFactory,
-                telemetry))
+                telemetry,
+                appHubHealthState))
             .ToArray();
 
         loggerFactory

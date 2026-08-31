@@ -233,6 +233,8 @@ public static class AppConst
             "ERP AppHub source connected and joined Monitoring for SourceId={SourceId}, Generation={Generation}.";
         public const string AppHubSourceDisconnectedMessage =
             "ERP AppHub source disconnected for SourceId={SourceId}.";
+        public const string AppHubSourceReconnectScheduledMessage =
+            "ERP AppHub reconnect scheduled for SourceId={SourceId}, Attempt={Attempt}, Delay={Delay}.";
         public const string AppHubCallbackDroppedMessage =
             "ERP AppHub callback was dropped after bounded admission for SourceId={SourceId}, EventName={EventName}, Reason={Reason}.";
         public const string AppHubCallbackProcessingFailedMessage =
@@ -399,9 +401,9 @@ public static class AppConst
         public const string MSG_APPHUB_EVENT_DUPLICATED =
             "{0}.EnabledEvents contains duplicate callback '{1}'.";
         public const string MSG_APPHUB_CREDENTIAL_ENVIRONMENT_VARIABLE_REQUIRED =
-            "{0} must configure AccessTokenEnvironmentVariable or TokenJwtEnvironmentVariable.";
+            "{0} must configure AccessToken/TokenJwt or an approved token environment variable.";
         public const string MSG_APPHUB_CREDENTIAL_VALUE_REQUIRED =
-            "No configured AppHub service credential was found in the approved environment variable.";
+            "No configured AppHub service credential was found in direct configuration or the approved environment variable.";
         public const string MSG_APPHUB_PAYLOAD_TOO_LARGE =
             "AppHub callback payload size {0} bytes exceeds the configured maximum of {1} bytes.";
         public const string MSG_APPHUB_RUNTIME_SOURCE_REQUIRED =
@@ -558,6 +560,7 @@ public static class AppConst
         public const string StatusParsed = "parsed";
         public const string StatusParsedWithWarnings = "parsed_with_warnings";
         public const string StatusUnmapped = "unmapped";
+        public const string StatusFailure = "failure";
         public const string InvalidRecordFormat = "INVALID_RECORD_FORMAT";
         public const string InvalidRawBlock = "INVALID_RAW_BLOCK";
         public const string UnknownRawBlock = "UNKNOWN_RAW_BLOCK";
@@ -582,6 +585,7 @@ public static class AppConst
         public const string MongoHealthCheckName = "mongodb";
         public const string SourceHealthCheckName = "raw-log-source";
         public const string IngestionHealthCheckName = "ingestion-progress";
+        public const string AppHubHealthCheckName = "apphub";
         public const string HealthStatusReady = "ready";
         public const string HealthStatusDegraded = "degraded";
         public const string HealthStatusUnhealthy = "unhealthy";
@@ -590,6 +594,9 @@ public static class AppConst
         public const string HealthReasonSourceUnavailable = "source_unavailable";
         public const string HealthReasonFileTruncated = "file_truncated";
         public const string HealthReasonProgressStale = "progress_stale";
+        public const string HealthReasonAppHubConnecting = "apphub_connecting";
+        public const string HealthReasonAppHubDegraded = "apphub_degraded";
+        public const string HealthReasonAppHubUnavailable = "apphub_unavailable";
         public const string AppHubAdmissionEnqueueTimeout = "enqueue_timeout";
         public const string AppHubAdmissionChannelClosed = "channel_closed";
         public const string AppHubAdmissionSerializationFailed = "serialization_failed";
@@ -620,6 +627,15 @@ public static class AppConst
         public const string MetricAppHubCallbacksReceived = "device_event_history.apphub.callbacks.received";
         public const string MetricAppHubCallbacksAdmitted = "device_event_history.apphub.callbacks.admitted";
         public const string MetricAppHubCallbacksDropped = "device_event_history.apphub.callbacks.dropped";
+        public const string MetricAppHubConnectionAttempts = "device_event_history.apphub.connection_attempts";
+        public const string MetricAppHubConnectionStates = "device_event_history.apphub.connection_states";
+        public const string MetricAppHubReconnects = "device_event_history.apphub.reconnects";
+        public const string MetricAppHubJoins = "device_event_history.apphub.joins";
+        public const string MetricAppHubChannelDepth = "device_event_history.apphub.channel.depth";
+        public const string MetricAppHubChannelSaturations = "device_event_history.apphub.channel.saturations";
+        public const string MetricAppHubMappingResults = "device_event_history.apphub.mapping.results";
+        public const string MetricAppHubLastCallbackAge = "device_event_history.apphub.last_callback_age";
+        public const string MetricAppHubLastSuccessfulJoinAge = "device_event_history.apphub.last_successful_join_age";
         public const string TagSourceId = "source_id";
         public const string TagMode = "mode";
         public const string TagFileId = "file_id";
@@ -627,6 +643,7 @@ public static class AppConst
         public const string TagOperation = "operation";
         public const string TagEventName = "event_name";
         public const string TagReason = "reason";
+        public const string TagState = "state";
         public const string ResultCanceled = "canceled";
         public const string ResultHistory = "history";
         public const string ResultFailure = "failure";
@@ -643,5 +660,7 @@ public static class AppConst
             "Ingestion loop is not live.";
         public const string HealthIngestionStatusDescription =
             "Ingestion status is {0}; reason={1}.";
+        public const string HealthAppHubStatusDescription =
+            "AppHub status is {0}; reason={1}.";
     }
 }

@@ -386,7 +386,7 @@ Khi Worker restart hoặc crash:
 
 ## 10. Observability và debug flow
 
-`IIngestionTelemetry` là abstraction cho metrics. `IngestionMetrics` dùng `System.Diagnostics.Metrics` và cập nhật `IngestionHealthState`.
+`IIngestionTelemetry` là abstraction cho metrics. `IngestionMetrics` dùng `System.Diagnostics.Metrics` và cập nhật health state của raw-log cùng AppHub.
 
 Metrics hiện có cho:
 
@@ -399,6 +399,8 @@ Metrics hiện có cho:
 - Mongo retry/failure;
 - oversized/truncated files;
 - persistence latency và ingestion lag.
+- AppHub connection attempts/states, reconnect/join, callback admission và mapping result;
+- AppHub channel depth/saturation, last callback age và source readiness.
 
 Structured logging dùng `AppConst.Logging` và `LoggingScopes`. Log scope chứa `WorkerId`, `SourceId`, `FolderDate`, `FileId`, `RelativePath`, offsets và result; không chứa connection string hoặc raw payload đầy đủ.
 
@@ -415,7 +417,9 @@ Các log quan trọng khi debug:
 | `record processed` | history/failure persistence và checkpoint flow đã hoàn tất |
 | `file truncated`, `checkpoint conflict`, `turn failed` | cần điều tra reliability |
 
-Health check classes đã đăng ký cho Mongo, source path và ingestion progress. Worker hiện chưa expose HTTP health endpoint; muốn đưa health ra ngoài cần bổ sung host/endpoint riêng.
+Health check classes đã đăng ký cho Mongo, raw-log source, ingestion progress và AppHub. AppHub có health state riêng theo source, phân biệt connecting/running/degraded/unhealthy; không có callback mới nhưng connection vẫn healthy không tự động bị coi là lỗi. Worker hiện chưa expose HTTP health endpoint; muốn đưa health ra ngoài cần bổ sung host/endpoint riêng.
+
+AppHub reconnect dùng connection generation mới cho mỗi lần rebuild, backoff exponential có jitter và join lại `Monitoring` sau khi SignalR báo reconnected. Callback chỉ được register một lần cho mỗi connection; transition join được serialize để không phát sinh duplicate join khi transport phát nhiều lifecycle event liên tiếp. Khi shutdown, runtime dừng receive/reconnect, complete bounded channel, drain consumer trong `ShutdownTimeout` và cancel processor nếu drain timeout; event còn trong memory không được coi là durable.
 
 ## 11. Testing hiện tại
 
@@ -428,10 +432,10 @@ Các test project:
 Lần kiểm tra local gần nhất:
 
 ```text
-Build:        succeeded
-Unit tests:   42 passed
-Integration:   3 passed
-Architecture:  1 passed
+Build:         succeeded
+Unit tests:    71 passed
+Integration:    4 passed
+Architecture:   1 passed
 ```
 
 Integration test cần MongoDB local/container tương ứng. Việc build/test pass không thay thế kiểm tra remote server, sample log thực tế và physical-device UAT.

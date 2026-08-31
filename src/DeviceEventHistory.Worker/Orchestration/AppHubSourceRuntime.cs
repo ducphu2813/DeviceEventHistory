@@ -23,6 +23,8 @@ public sealed class AppHubSourceRuntime : IAsyncDisposable
     private readonly AppHubEventAdmission admission;
     private readonly AppHubEventProcessor processor;
     private readonly IngestionHealthState healthState;
+    private readonly AppHubHealthState appHubHealthState;
+    private readonly IIngestionTelemetry telemetry;
     private readonly TimeSpan shutdownTimeout;
     private readonly ILogger<AppHubSourceRuntime> logger;
     private int started;
@@ -41,7 +43,8 @@ public sealed class AppHubSourceRuntime : IAsyncDisposable
         TimeProvider timeProvider,
         IngestionHealthState healthState,
         ILoggerFactory loggerFactory,
-        IIngestionTelemetry? telemetry = null)
+        IIngestionTelemetry? telemetry = null,
+        AppHubHealthState? appHubHealthState = null)
     {
         ArgumentNullException.ThrowIfNull(source);
         ArgumentNullException.ThrowIfNull(connectionFactory);
@@ -72,17 +75,21 @@ public sealed class AppHubSourceRuntime : IAsyncDisposable
         this.source = source;
         this.connectionFactory = connectionFactory;
         this.callbackRegistrar = callbackRegistrar;
-        var ingestionTelemetry = telemetry ?? NullIngestionTelemetry.Instance;
+        this.telemetry = telemetry ?? NullIngestionTelemetry.Instance;
         this.healthState = healthState;
+        this.appHubHealthState = appHubHealthState ?? new AppHubHealthState(
+            timeProvider,
+            failureUnhealthyThreshold: 3);
         this.shutdownTimeout = shutdownTimeout;
         logger = loggerFactory.CreateLogger<AppHubSourceRuntime>();
-        admission = new AppHubEventAdmission(source, timeProvider, ingestionTelemetry);
+        admission = new AppHubEventAdmission(source, timeProvider, this.telemetry);
         processor = new AppHubEventProcessor(
             mapperRegistry,
             persistenceService,
             workerId,
             maximumPayloadBytes,
-            loggerFactory.CreateLogger<AppHubEventProcessor>());
+            loggerFactory.CreateLogger<AppHubEventProcessor>(),
+            this.telemetry);
     }
 
     public string SourceId => source.SourceId.Trim();
@@ -135,19 +142,30 @@ public sealed class AppHubSourceRuntime : IAsyncDisposable
         var reconnectAttempt = 0;
         while (!stoppingToken.IsCancellationRequested)
         {
+            if (reconnectAttempt > 0)
+            {
+                telemetry.RecordAppHubReconnect(SourceId);
+            }
+
             IAppHubMonitoringConnection? connection = null;
             IReadOnlyList<IDisposable> subscriptions = [];
+            var failureRecorded = 0;
+            var joinAttempted = 0;
             var disconnected = new TaskCompletionSource<bool>(
                 TaskCreationOptions.RunContinuationsAsynchronously);
             try
             {
+                telemetry.RecordAppHubConnectionAttempt(SourceId);
                 connection = connectionFactory.Create(source);
                 activeConnection = connection;
                 var connectionGeneration = connection.ConnectionGeneration;
                 connection.StateChanged += state =>
                 {
+                    telemetry.RecordAppHubConnectionState(SourceId, state.ToString());
+                    appHubHealthState.MarkConnectionState(SourceId, state);
                     if (state == AppHubConnectionState.Running)
                     {
+                        telemetry.RecordAppHubJoin(SourceId, succeeded: true);
                         healthState.MarkSourceAvailable(SourceId);
                     }
                     else if (state == AppHubConnectionState.Disconnected)
@@ -157,7 +175,13 @@ public sealed class AppHubSourceRuntime : IAsyncDisposable
                 };
                 connection.LifecycleFailed += exception =>
                 {
-                    healthState.MarkSourceUnavailable(SourceId);
+                    if (Interlocked.Exchange(ref failureRecorded, 1) == 0)
+                    {
+                        appHubHealthState.MarkConnectionFailure(SourceId);
+                        healthState.MarkSourceUnavailable(SourceId);
+                        telemetry.RecordAppHubJoin(SourceId, succeeded: false);
+                    }
+
                     logger.LogWarning(
                         exception,
                         AppConst.Logging.AppHubSourceConnectionFailedMessage,
@@ -173,9 +197,9 @@ public sealed class AppHubSourceRuntime : IAsyncDisposable
                         eventName,
                         arguments));
 
+                Interlocked.Exchange(ref joinAttempted, 1);
                 await connection.StartAsync(stoppingToken);
                 reconnectAttempt = 0;
-                healthState.MarkSourceAvailable(SourceId);
                 logger.LogInformation(
                     AppConst.Logging.AppHubSourceConnectedMessage,
                     SourceId,
@@ -191,7 +215,16 @@ public sealed class AppHubSourceRuntime : IAsyncDisposable
             }
             catch (Exception exception)
             {
-                healthState.MarkSourceUnavailable(SourceId);
+                if (Interlocked.Exchange(ref failureRecorded, 1) == 0)
+                {
+                    appHubHealthState.MarkConnectionFailure(SourceId);
+                    healthState.MarkSourceUnavailable(SourceId);
+                    if (Volatile.Read(ref joinAttempted) != 0)
+                    {
+                        telemetry.RecordAppHubJoin(SourceId, succeeded: false);
+                    }
+                }
+
                 logger.LogWarning(
                     exception,
                     AppConst.Logging.AppHubSourceConnectionFailedMessage,
@@ -259,7 +292,13 @@ public sealed class AppHubSourceRuntime : IAsyncDisposable
             source.ReconnectMaxDelay.TotalSeconds,
             exponentialSeconds);
         var jitteredSeconds = cappedSeconds * (0.5 + (Random.Shared.NextDouble() * 0.5));
-        await Task.Delay(TimeSpan.FromSeconds(jitteredSeconds), stoppingToken);
+        var delay = TimeSpan.FromSeconds(jitteredSeconds);
+        logger.LogInformation(
+            AppConst.Logging.AppHubSourceReconnectScheduledMessage,
+            SourceId,
+            reconnectAttempt + 1,
+            delay);
+        await Task.Delay(delay, stoppingToken);
     }
 
     private async Task DrainAsync(

@@ -209,9 +209,11 @@ public sealed class AppHubOptionsValidator(
         string prefix,
         ICollection<string> failures)
     {
-        var hasAccessTokenVariable = !string.IsNullOrWhiteSpace(source.AccessTokenEnvironmentVariable);
-        var hasJwtTokenVariable = !string.IsNullOrWhiteSpace(source.TokenJwtEnvironmentVariable);
-        if (!hasAccessTokenVariable && !hasJwtTokenVariable)
+        var hasAccessToken = !string.IsNullOrWhiteSpace(source.AccessToken)
+            || !string.IsNullOrWhiteSpace(source.AccessTokenEnvironmentVariable);
+        var hasJwtToken = !string.IsNullOrWhiteSpace(source.TokenJwt)
+            || !string.IsNullOrWhiteSpace(source.TokenJwtEnvironmentVariable);
+        if (!hasAccessToken && !hasJwtToken)
         {
             failures.Add(AppConst.Messages.Format(
                 AppConst.Messages.MSG_APPHUB_CREDENTIAL_ENVIRONMENT_VARIABLE_REQUIRED,

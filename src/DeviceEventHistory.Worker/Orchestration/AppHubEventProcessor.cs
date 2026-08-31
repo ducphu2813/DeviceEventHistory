@@ -1,6 +1,7 @@
 using System.Threading.Channels;
 using DeviceEventHistory.Application.Ingestion;
 using DeviceEventHistory.Application.Persistence;
+using DeviceEventHistory.Application.Observability;
 using DeviceEventHistory.Domain.Common;
 using Microsoft.Extensions.Logging;
 
@@ -15,8 +16,12 @@ public sealed class AppHubEventProcessor(
     ICanonicalIngestionPersistenceService persistenceService,
     string workerId,
     int maximumPayloadBytes,
-    ILogger<AppHubEventProcessor> logger)
+    ILogger<AppHubEventProcessor> logger,
+    IIngestionTelemetry? telemetry = null)
 {
+    private readonly IIngestionTelemetry telemetry =
+        telemetry ?? NullIngestionTelemetry.Instance;
+
     public async Task<int> ProcessAsync(
         string sourceId,
         ChannelReader<RawSourceEvent> reader,
@@ -33,13 +38,29 @@ public sealed class AppHubEventProcessor(
         var processedCount = 0;
         await foreach (var sourceEvent in reader.ReadAllAsync(cancellationToken))
         {
+            telemetry.RecordAppHubChannelDepth(sourceEvent.SourceId, reader.Count);
             try
             {
-                var ingestionResult = sourceEvent.PayloadSizeBytes > maximumPayloadBytes
-                    ? RawSourceEventFailureFactory.CreatePayloadTooLargeFailure(
-                        sourceEvent,
-                        maximumPayloadBytes)
-                    : mapperRegistry.Map(sourceEvent);
+                CanonicalIngestionResult ingestionResult;
+                try
+                {
+                    ingestionResult = sourceEvent.PayloadSizeBytes > maximumPayloadBytes
+                        ? RawSourceEventFailureFactory.CreatePayloadTooLargeFailure(
+                            sourceEvent,
+                            maximumPayloadBytes)
+                        : mapperRegistry.Map(sourceEvent);
+                }
+                catch
+                {
+                    telemetry.RecordAppHubMappingResult(
+                        sourceEvent.SourceId,
+                        AppConst.Parsing.StatusFailure);
+                    throw;
+                }
+
+                telemetry.RecordAppHubMappingResult(
+                    sourceEvent.SourceId,
+                    ingestionResult.Event?.Parse.Status ?? AppConst.Parsing.StatusFailure);
 
                 ingestionResult.EnsureExactlyOneOutcome();
                 await persistenceService.PersistAsync(
@@ -61,6 +82,8 @@ public sealed class AppHubEventProcessor(
                     sourceEvent.EventName);
             }
         }
+
+        telemetry.RecordAppHubChannelDepth(sourceId, reader.Count);
 
         return processedCount;
     }

@@ -28,13 +28,25 @@ public sealed class AppHubSourceOptions
     public List<string> EnabledEvents { get; set; } = [];
 
     /// <summary>
-    /// Name of the environment variable containing the approved UserCookie token.
-    /// The token value is never part of configuration objects or logs.
+    /// Approved UserCookie token for local/development configuration.
+    /// Production deployments should prefer a secret provider or environment variable.
+    /// </summary>
+    public string? AccessToken { get; set; }
+
+    /// <summary>
+    /// Approved UserCookie token environment variable name.
+    /// The token value is never part of logs or telemetry.
     /// </summary>
     public string? AccessTokenEnvironmentVariable { get; set; }
 
     /// <summary>
-    /// Name of the environment variable containing the approved JWT token.
+    /// Approved JWT token for local/development configuration.
+    /// Used as the SignalR <c>tokenjwt</c> query value when no UserCookie token exists.
+    /// </summary>
+    public string? TokenJwt { get; set; }
+
+    /// <summary>
+    /// Approved JWT token environment variable name.
     /// Used as the SignalR <c>tokenjwt</c> query value when no UserCookie token exists.
     /// </summary>
     public string? TokenJwtEnvironmentVariable { get; set; }

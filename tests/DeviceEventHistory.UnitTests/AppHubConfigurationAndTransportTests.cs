@@ -50,7 +50,7 @@ public sealed class AppHubConfigurationAndTransportTests
         Assert.Contains(result.Failures!, failure => failure.Contains("EnqueueTimeout", StringComparison.Ordinal));
         Assert.Contains(result.Failures!, failure => failure.Contains("Reconnect", StringComparison.Ordinal));
         Assert.Contains(result.Failures!, failure => failure.Contains("unsupported callback", StringComparison.Ordinal));
-        Assert.Contains(result.Failures!, failure => failure.Contains("AccessTokenEnvironmentVariable", StringComparison.Ordinal));
+        Assert.Contains(result.Failures!, failure => failure.Contains("AccessToken/TokenJwt", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -101,6 +101,31 @@ public sealed class AppHubConfigurationAndTransportTests
     }
 
     [Fact]
+    public void Direct_AppHub_credential_is_validated_and_redacted()
+    {
+        const string secret = "direct-user-cookie-secret";
+        var appHub = CreateAppHubOptions();
+        var source = appHub.Sources[0];
+        source.AccessToken = secret;
+        source.AccessTokenEnvironmentVariable = null;
+
+        var validator = new AppHubOptionsValidator(
+            Options.Create(new WorkerOptions { Enabled = true, WorkerId = "worker-01" }),
+            Options.Create(new RfidRawLogOptions()));
+        var validation = validator.Validate(null, appHub);
+
+        var summary = new ConfigurationRedactor().CreateSummary(
+            new WorkerOptions { Enabled = true, WorkerId = "worker-01" },
+            new RfidRawLogOptions(),
+            new DeviceEventHistory.Infrastructure.MongoDb.Configuration.MongoDbOptions(),
+            appHub);
+
+        Assert.True(validation.Succeeded);
+        Assert.DoesNotContain(secret, summary.ToString(), StringComparison.Ordinal);
+        Assert.True(summary.AppHubSources.Single().CredentialConfigured);
+    }
+
+    [Fact]
     public async Task Connection_registers_callbacks_before_start_and_joins_after_connect()
     {
         var client = new FakeSignalRClient();
@@ -132,6 +157,7 @@ public sealed class AppHubConfigurationAndTransportTests
         connection.RegisterCallback("receiveDeviceOnline", _ => { });
         await connection.StartAsync(CancellationToken.None);
         client.RaiseReconnecting();
+        client.RaiseReconnected();
         client.RaiseReconnected();
 
         await WaitUntilAsync(() => connection.State == AppHubConnectionState.Running);

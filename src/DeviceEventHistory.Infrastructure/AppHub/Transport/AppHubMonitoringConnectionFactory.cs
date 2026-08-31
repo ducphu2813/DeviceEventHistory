@@ -23,7 +23,9 @@ public sealed class AppHubMonitoringConnectionFactory : IAppHubMonitoringConnect
 
     private static IDictionary<string, string> CreateCredentialQuery(AppHubSourceOptions source)
     {
-        var accessToken = GetEnvironmentValue(source.AccessTokenEnvironmentVariable);
+        var accessToken = GetConfiguredValue(
+            source.AccessToken,
+            source.AccessTokenEnvironmentVariable);
         if (!string.IsNullOrWhiteSpace(accessToken))
         {
             return new Dictionary<string, string>(StringComparer.Ordinal)
@@ -32,7 +34,9 @@ public sealed class AppHubMonitoringConnectionFactory : IAppHubMonitoringConnect
             };
         }
 
-        var jwtToken = GetEnvironmentValue(source.TokenJwtEnvironmentVariable);
+        var jwtToken = GetConfiguredValue(
+            source.TokenJwt,
+            source.TokenJwtEnvironmentVariable);
         if (!string.IsNullOrWhiteSpace(jwtToken))
         {
             return new Dictionary<string, string>(StringComparer.Ordinal)
@@ -44,10 +48,19 @@ public sealed class AppHubMonitoringConnectionFactory : IAppHubMonitoringConnect
         throw new InvalidOperationException(AppConst.Messages.MSG_APPHUB_CREDENTIAL_VALUE_REQUIRED);
     }
 
-    private static string? GetEnvironmentValue(string? variableName) =>
-        string.IsNullOrWhiteSpace(variableName)
+    private static string? GetConfiguredValue(
+        string? directValue,
+        string? environmentVariableName)
+    {
+        if (!string.IsNullOrWhiteSpace(directValue))
+        {
+            return directValue;
+        }
+
+        return string.IsNullOrWhiteSpace(environmentVariableName)
             ? null
-            : Environment.GetEnvironmentVariable(variableName.Trim());
+            : Environment.GetEnvironmentVariable(environmentVariableName.Trim());
+    }
 
     private sealed class SignalRClientAdapter(HubConnection connection) : IAppHubSignalRClient
     {

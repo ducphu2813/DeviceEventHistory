@@ -85,7 +85,17 @@ public static class ServiceCollectionExtensions
                 options.SourceFailureUnhealthyThreshold,
                 options.ProgressStaleAfter);
         });
-        services.AddSingleton<IngestionMetrics>();
+        services.AddSingleton<AppHubHealthState>(serviceProvider =>
+        {
+            var options = serviceProvider.GetRequiredService<IOptions<ObservabilityOptions>>().Value;
+            return new AppHubHealthState(
+                serviceProvider.GetRequiredService<TimeProvider>(),
+                options.SourceFailureUnhealthyThreshold);
+        });
+        services.AddSingleton<IngestionMetrics>(serviceProvider =>
+            new IngestionMetrics(
+                serviceProvider.GetRequiredService<IngestionHealthState>(),
+                serviceProvider.GetRequiredService<AppHubHealthState>()));
         services.AddSingleton<IIngestionTelemetry>(serviceProvider =>
             serviceProvider.GetRequiredService<IngestionMetrics>());
         services.AddSingleton<IRawLogSourceFileDiscovery, LocalRawLogFileDiscovery>();
@@ -161,7 +171,8 @@ public static class ServiceCollectionExtensions
         services.AddHealthChecks()
             .AddCheck<MongoDbHealthCheck>(AppConst.Observability.MongoHealthCheckName)
             .AddCheck<SourcePathHealthCheck>(AppConst.Observability.SourceHealthCheckName)
-            .AddCheck<IngestionProgressHealthCheck>(AppConst.Observability.IngestionHealthCheckName);
+            .AddCheck<IngestionProgressHealthCheck>(AppConst.Observability.IngestionHealthCheckName)
+            .AddCheck<AppHubHealthCheck>(AppConst.Observability.AppHubHealthCheckName);
         services.AddHostedService<StartupInitializationHostedService>();
         services.AddHostedService<ErpAppHubMonitoringHostedService>();
 

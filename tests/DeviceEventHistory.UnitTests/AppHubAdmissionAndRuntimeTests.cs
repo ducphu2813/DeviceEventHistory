@@ -162,6 +162,38 @@ public sealed class AppHubAdmissionAndRuntimeTests
         Assert.Equal(1, secondConnection.RegistrationCount);
     }
 
+    [Fact]
+    public async Task Source_runtime_cancels_processor_when_shutdown_drain_times_out()
+    {
+        var source = CreateSource();
+        var connection = new FakeMonitoringConnection(source.SourceId, "generation-1");
+        var persistence = new BlockingPersistenceService();
+        var runtime = new AppHubSourceRuntime(
+            source,
+            new FakeConnectionFactory(connection),
+            new AppHubCallbackRegistrar(),
+            new RawSourceEventMapperRegistry(
+                [new TestMapper(AppConst.AppHub.Callbacks.ReceiveDeviceOnline)],
+                new UnmappedRawSourceEventMapper()),
+            persistence,
+            "worker-01",
+            maximumPayloadBytes: 1_024,
+            shutdownTimeout: TimeSpan.FromMilliseconds(20),
+            TimeProvider.System,
+            CreateHealthState(),
+            NullLoggerFactory.Instance);
+        using var cancellation = new CancellationTokenSource();
+
+        var runTask = runtime.RunAsync(cancellation.Token);
+        await connection.Started.Task.WaitAsync(TimeSpan.FromSeconds(2));
+        connection.Emit(["blocking"]);
+        await persistence.Started.Task.WaitAsync(TimeSpan.FromSeconds(2));
+        cancellation.Cancel();
+
+        await runTask.WaitAsync(TimeSpan.FromSeconds(2));
+        await runtime.DisposeAsync();
+    }
+
     private static AppHubSourceOptions CreateSource() => new()
     {
         SourceId = "apphub-source",
@@ -261,6 +293,22 @@ public sealed class AppHubAdmissionAndRuntimeTests
                 ingestionResult.Event.ReceivedAtUtc!.Value,
                 ingestionResult.Event.ReceivedAtUtc.Value,
                 ProcessingDurationMs: 0));
+        }
+    }
+
+    private sealed class BlockingPersistenceService : ICanonicalIngestionPersistenceService
+    {
+        public TaskCompletionSource<bool> Started { get; } = new(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public async Task<CanonicalIngestionPersistenceOutcome> PersistAsync(
+            CanonicalIngestionResult ingestionResult,
+            string workerId,
+            CancellationToken cancellationToken)
+        {
+            Started.TrySetResult(true);
+            await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
+            throw new InvalidOperationException("The persistence delay should be cancelled.");
         }
     }
 

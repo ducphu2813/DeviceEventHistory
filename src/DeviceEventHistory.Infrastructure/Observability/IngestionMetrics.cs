@@ -52,22 +52,51 @@ public sealed class IngestionMetrics : IIngestionTelemetry
         AppConst.Observability.MetricAppHubCallbacksAdmitted);
     private readonly Counter<long> appHubCallbacksDropped = Meter.CreateCounter<long>(
         AppConst.Observability.MetricAppHubCallbacksDropped);
+    private readonly Counter<long> appHubConnectionAttempts = Meter.CreateCounter<long>(
+        AppConst.Observability.MetricAppHubConnectionAttempts);
+    private readonly Counter<long> appHubConnectionStates = Meter.CreateCounter<long>(
+        AppConst.Observability.MetricAppHubConnectionStates);
+    private readonly Counter<long> appHubReconnects = Meter.CreateCounter<long>(
+        AppConst.Observability.MetricAppHubReconnects);
+    private readonly Counter<long> appHubJoins = Meter.CreateCounter<long>(
+        AppConst.Observability.MetricAppHubJoins);
+    private readonly Counter<long> appHubChannelSaturations = Meter.CreateCounter<long>(
+        AppConst.Observability.MetricAppHubChannelSaturations);
+    private readonly Counter<long> appHubMappingResults = Meter.CreateCounter<long>(
+        AppConst.Observability.MetricAppHubMappingResults);
     private readonly Histogram<double> persistenceLatency = Meter.CreateHistogram<double>(
         AppConst.Observability.MetricPersistenceLatency,
         "ms");
 
     private readonly IngestionHealthState healthState;
+    private readonly AppHubHealthState appHubHealthState;
 
-    public IngestionMetrics(IngestionHealthState healthState)
+    public IngestionMetrics(
+        IngestionHealthState healthState,
+        AppHubHealthState? appHubHealthState = null)
     {
         ArgumentNullException.ThrowIfNull(healthState);
         this.healthState = healthState;
+        this.appHubHealthState = appHubHealthState ?? new AppHubHealthState(
+            TimeProvider.System,
+            failureUnhealthyThreshold: 3);
         Meter.CreateObservableGauge<long>(
             AppConst.Observability.MetricFilesActive,
             () => healthState.Snapshot.ActiveFileCount);
         Meter.CreateObservableGauge<long>(
             AppConst.Observability.MetricIngestionLagBytes,
             ObserveLagBytes);
+        Meter.CreateObservableGauge<long>(
+            AppConst.Observability.MetricAppHubChannelDepth,
+            ObserveAppHubChannelDepth);
+        Meter.CreateObservableGauge<double>(
+            AppConst.Observability.MetricAppHubLastCallbackAge,
+            ObserveAppHubLastCallbackAge,
+            "s");
+        Meter.CreateObservableGauge<double>(
+            AppConst.Observability.MetricAppHubLastSuccessfulJoinAge,
+            ObserveAppHubLastSuccessfulJoinAge,
+            "s");
     }
 
     public void RecordFilesDiscovered(string sourceId, string mode, int count)
@@ -181,8 +210,11 @@ public sealed class IngestionMetrics : IIngestionTelemetry
             pendingBytes,
             checkpointUpdatedAtUtc);
 
-    public void RecordAppHubCallbackReceived(string sourceId, string eventName) =>
+    public void RecordAppHubCallbackReceived(string sourceId, string eventName)
+    {
         appHubCallbacksReceived.Add(1, AppHubTags(sourceId, eventName));
+        appHubHealthState.RecordCallbackReceived(sourceId);
+    }
 
     public void RecordAppHubCallbackAdmitted(string sourceId, string eventName) =>
         appHubCallbacksAdmitted.Add(1, AppHubTags(sourceId, eventName));
@@ -193,12 +225,67 @@ public sealed class IngestionMetrics : IIngestionTelemetry
         healthState.MarkSourceUnavailable(sourceId);
     }
 
+    public void RecordAppHubConnectionAttempt(string sourceId) =>
+        appHubConnectionAttempts.Add(1, SourceTags(sourceId));
+
+    public void RecordAppHubConnectionState(string sourceId, string state) =>
+        appHubConnectionStates.Add(1, AppHubStateTags(sourceId, state));
+
+    public void RecordAppHubReconnect(string sourceId) =>
+        appHubReconnects.Add(1, SourceTags(sourceId));
+
+    public void RecordAppHubJoin(string sourceId, bool succeeded) =>
+        appHubJoins.Add(1, AppHubStateTags(sourceId, succeeded ? "succeeded" : "failed"));
+
+    public void RecordAppHubChannelDepth(string sourceId, int depth) =>
+        appHubHealthState.SetChannelDepth(sourceId, depth);
+
+    public void RecordAppHubChannelSaturation(string sourceId) =>
+        appHubChannelSaturations.Add(1, SourceTags(sourceId));
+
+    public void RecordAppHubMappingResult(string sourceId, string status) =>
+        appHubMappingResults.Add(1, AppHubStateTags(sourceId, status));
+
     private IEnumerable<Measurement<long>> ObserveLagBytes()
     {
         foreach (var file in healthState.Snapshot.Files)
         {
             var lag = Math.Max(0, (file.FileLength ?? file.CheckpointPosition) - file.CheckpointPosition);
             yield return new Measurement<long>(lag, Tags(file.SourceId, file.FileId));
+        }
+    }
+
+    private IEnumerable<Measurement<long>> ObserveAppHubChannelDepth()
+    {
+        foreach (var source in appHubHealthState.Snapshot.Sources)
+        {
+            yield return new Measurement<long>(
+                source.ChannelDepth,
+                SourceTags(source.SourceId));
+        }
+    }
+
+    private IEnumerable<Measurement<double>> ObserveAppHubLastCallbackAge()
+    {
+        var now = DateTimeOffset.UtcNow;
+        foreach (var source in appHubHealthState.Snapshot.Sources)
+        {
+            var age = source.LastCallbackAtUtc is { } lastCallback
+                ? Math.Max(0, (now - lastCallback).TotalSeconds)
+                : 0;
+            yield return new Measurement<double>(age, SourceTags(source.SourceId));
+        }
+    }
+
+    private IEnumerable<Measurement<double>> ObserveAppHubLastSuccessfulJoinAge()
+    {
+        var now = DateTimeOffset.UtcNow;
+        foreach (var source in appHubHealthState.Snapshot.Sources)
+        {
+            var age = source.LastSuccessfulJoinAtUtc is { } lastJoin
+                ? Math.Max(0, (now - lastJoin).TotalSeconds)
+                : 0;
+            yield return new Measurement<double>(age, SourceTags(source.SourceId));
         }
     }
 
@@ -250,4 +337,15 @@ public sealed class IngestionMetrics : IIngestionTelemetry
 
         return tags;
     }
+
+    private static TagList SourceTags(string sourceId) => new()
+    {
+        { AppConst.Observability.TagSourceId, sourceId }
+    };
+
+    private static TagList AppHubStateTags(string sourceId, string state) => new()
+    {
+        { AppConst.Observability.TagSourceId, sourceId },
+        { AppConst.Observability.TagState, state }
+    };
 }

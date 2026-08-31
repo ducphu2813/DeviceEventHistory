@@ -82,6 +82,7 @@ public sealed class AppHubEventAdmission : IDisposable
         if (channel.Writer.TryWrite(sourceEvent))
         {
             telemetry.RecordAppHubCallbackAdmitted(SourceId, normalizedEventName);
+            telemetry.RecordAppHubChannelDepth(SourceId, channel.Reader.Count);
             return AppHubAdmissionResult.Admitted(sourceEvent);
         }
 
@@ -97,7 +98,13 @@ public sealed class AppHubEventAdmission : IDisposable
             if (canWrite && channel.Writer.TryWrite(sourceEvent))
             {
                 telemetry.RecordAppHubCallbackAdmitted(SourceId, normalizedEventName);
+                telemetry.RecordAppHubChannelDepth(SourceId, channel.Reader.Count);
                 return AppHubAdmissionResult.Admitted(sourceEvent);
+            }
+
+            if (Volatile.Read(ref completed) == 0)
+            {
+                telemetry.RecordAppHubChannelSaturation(SourceId);
             }
 
             return Drop(
@@ -108,6 +115,7 @@ public sealed class AppHubEventAdmission : IDisposable
         }
         catch (TimeoutException)
         {
+            telemetry.RecordAppHubChannelSaturation(SourceId);
             return Drop(normalizedEventName, AppConst.Observability.AppHubAdmissionEnqueueTimeout);
         }
         catch (OperationCanceledException) when (admissionCancellation.IsCancellationRequested)
@@ -134,6 +142,7 @@ public sealed class AppHubEventAdmission : IDisposable
     private AppHubAdmissionResult Drop(string eventName, string reason)
     {
         telemetry.RecordAppHubCallbackDropped(SourceId, eventName, reason);
+        telemetry.RecordAppHubChannelDepth(SourceId, channel.Reader.Count);
         return AppHubAdmissionResult.Dropped(reason);
     }
 }

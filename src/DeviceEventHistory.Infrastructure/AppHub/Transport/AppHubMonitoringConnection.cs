@@ -7,6 +7,7 @@ public sealed class AppHubMonitoringConnection : IAppHubMonitoringConnection
     private readonly IAppHubSignalRClient client;
     private readonly IAppHubSignalRProxy proxy;
     private readonly List<IDisposable> subscriptions = [];
+    private readonly SemaphoreSlim joinGate = new(1, 1);
     private bool disposed;
 
     public AppHubMonitoringConnection(
@@ -87,22 +88,14 @@ public sealed class AppHubMonitoringConnection : IAppHubMonitoringConnection
     public async Task JoinMonitoringAsync(CancellationToken cancellationToken)
     {
         ObjectDisposedException.ThrowIf(disposed, this);
-        if (State != AppHubConnectionState.Connected)
-        {
-            throw new InvalidOperationException(
-                AppConst.Messages.MSG_APPHUB_PROXY_REQUIRED);
-        }
-
-        SetState(AppHubConnectionState.JoiningMonitoring);
+        await joinGate.WaitAsync(cancellationToken);
         try
         {
-            await proxy.JoinMonitoringAsync(cancellationToken);
-            SetState(AppHubConnectionState.Running);
+            await JoinMonitoringCoreAsync(cancellationToken);
         }
-        catch
+        finally
         {
-            SetState(AppHubConnectionState.Connected);
-            throw;
+            joinGate.Release();
         }
     }
 
@@ -138,22 +131,65 @@ public sealed class AppHubMonitoringConnection : IAppHubMonitoringConnection
 
     private void OnReconnecting() => SetState(AppHubConnectionState.Reconnecting);
 
-    private async void OnReconnected()
+    private void OnReconnected()
+    {
+        _ = RejoinAfterReconnectAsync();
+    }
+
+    private async Task RejoinAfterReconnectAsync()
     {
         if (disposed)
         {
             return;
         }
 
-        SetState(AppHubConnectionState.Connected);
+        await joinGate.WaitAsync();
         try
         {
-            await JoinMonitoringAsync(CancellationToken.None);
+            if (disposed || State == AppHubConnectionState.Stopping ||
+                State == AppHubConnectionState.Running)
+            {
+                return;
+            }
+
+            SetState(AppHubConnectionState.Connected);
+            await JoinMonitoringCoreAsync(CancellationToken.None);
         }
         catch (Exception exception)
         {
             SetState(AppHubConnectionState.Disconnected);
             LifecycleFailed?.Invoke(exception);
+        }
+        finally
+        {
+            joinGate.Release();
+        }
+    }
+
+    private async Task JoinMonitoringCoreAsync(CancellationToken cancellationToken)
+    {
+        ObjectDisposedException.ThrowIf(disposed, this);
+        if (State == AppHubConnectionState.Running)
+        {
+            return;
+        }
+
+        if (State != AppHubConnectionState.Connected)
+        {
+            throw new InvalidOperationException(
+                AppConst.Messages.MSG_APPHUB_PROXY_REQUIRED);
+        }
+
+        SetState(AppHubConnectionState.JoiningMonitoring);
+        try
+        {
+            await proxy.JoinMonitoringAsync(cancellationToken);
+            SetState(AppHubConnectionState.Running);
+        }
+        catch
+        {
+            SetState(AppHubConnectionState.Connected);
+            throw;
         }
     }
 

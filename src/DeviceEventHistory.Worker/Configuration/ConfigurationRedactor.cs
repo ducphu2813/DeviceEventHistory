@@ -66,9 +66,17 @@ public sealed class ConfigurationRedactor
             ? uri.Host
             : string.Empty;
 
-    private static bool HasCredentialConfigured(AppHubSourceOptions source) =>
-        (!string.IsNullOrWhiteSpace(source.AccessTokenEnvironmentVariable) &&
-            !string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable(source.AccessTokenEnvironmentVariable))) ||
-        (!string.IsNullOrWhiteSpace(source.TokenJwtEnvironmentVariable) &&
-            !string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable(source.TokenJwtEnvironmentVariable)));
+    private static bool HasCredentialConfigured(AppHubSourceOptions source)
+    {
+        var hasAccessToken = !string.IsNullOrWhiteSpace(source.AccessToken)
+            || (!string.IsNullOrWhiteSpace(source.AccessTokenEnvironmentVariable)
+                && !string.IsNullOrWhiteSpace(
+                    Environment.GetEnvironmentVariable(source.AccessTokenEnvironmentVariable)));
+        var hasJwtToken = !string.IsNullOrWhiteSpace(source.TokenJwt)
+            || (!string.IsNullOrWhiteSpace(source.TokenJwtEnvironmentVariable)
+                && !string.IsNullOrWhiteSpace(
+                    Environment.GetEnvironmentVariable(source.TokenJwtEnvironmentVariable)));
+
+        return hasAccessToken || hasJwtToken;
+    }
 }

@@ -14,9 +14,10 @@ public sealed class StartupInitializationHostedService(
     MongoIndexInitializer indexInitializer,
     IOptions<WorkerOptions> workerOptions,
     IOptions<RfidRawLogOptions> rawLogOptions,
-    IOptions<AppHubOptions> appHubOptions,
-    IngestionHealthState healthState,
-    ILogger<StartupInitializationHostedService> logger) : IHostedService
+        IOptions<AppHubOptions> appHubOptions,
+        IngestionHealthState healthState,
+        AppHubHealthState appHubHealthState,
+        ILogger<StartupInitializationHostedService> logger) : IHostedService
 {
     public async Task StartAsync(CancellationToken cancellationToken)
     {
@@ -31,6 +32,9 @@ public sealed class StartupInitializationHostedService(
                 .Select(source => source.SourceId));
         if (appHubOptions.Value.Enabled)
         {
+            var appHubSources = (appHubOptions.Value.Sources ?? [])
+                .Select(source => source.SourceId);
+            appHubHealthState.ConfigureSources(appHubSources);
             healthState.ConfigureSources(
                 (appHubOptions.Value.Sources ?? [])
                     .Select(source => source.SourceId));
