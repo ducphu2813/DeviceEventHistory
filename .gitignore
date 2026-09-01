@@ -52,3 +52,4 @@ pptx-*/
 *.pidb
 *.pdb
 *.cache
+.planning
