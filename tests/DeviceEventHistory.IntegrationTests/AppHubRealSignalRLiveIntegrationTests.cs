@@ -3,7 +3,6 @@ using DeviceEventHistory.Application.Ingestion;
 using DeviceEventHistory.Application.Persistence;
 using DeviceEventHistory.Domain.Common;
 using DeviceEventHistory.Domain.Events;
-using DeviceEventHistory.Infrastructure.AppHub.Admission;
 using DeviceEventHistory.Infrastructure.AppHub.Configuration;
 using DeviceEventHistory.Infrastructure.AppHub.Transport;
 using DeviceEventHistory.Infrastructure.MongoDb;
@@ -13,6 +12,7 @@ using DeviceEventHistory.Infrastructure.MongoDb.Indexes;
 using DeviceEventHistory.Infrastructure.MongoDb.Stores;
 using DeviceEventHistory.Infrastructure.Observability;
 using DeviceEventHistory.Worker.Orchestration;
+using Microsoft.AspNet.SignalR.Client;
 using Microsoft.Extensions.Logging.Abstractions;
 using MongoDB.Bson;
 using MongoDB.Driver;
@@ -23,7 +23,7 @@ namespace DeviceEventHistory.IntegrationTests;
 [Trait("Category", "LiveE2E")]
 public sealed class AppHubRealSignalRLiveIntegrationTests
 {
-    private const string DefaultEndpoint = "https://training-api.un-available.net/signalr";
+    private const string DefaultEndpoint = "http://192.168.1.38:8089/signalr";
 
     private static bool ShouldDropTestDatabase()
     {
@@ -48,8 +48,8 @@ public sealed class AppHubRealSignalRLiveIntegrationTests
             Endpoint = Environment.GetEnvironmentVariable("DEVICE_EVENT_HISTORY_APPHUB_ENDPOINT")
                 ?? DefaultEndpoint,
             HubName = AppConst.AppHub.DefaultHubName,
-            AccessToken = string.Empty,
-            TokenJwt = token,
+            AccessToken = IsJwt(token) ? string.Empty : token,
+            TokenJwt = IsJwt(token) ? token : string.Empty,
             EnabledEvents = AppConst.AppHub.Callbacks.Registered.ToList()
         };
 
@@ -77,7 +77,17 @@ public sealed class AppHubRealSignalRLiveIntegrationTests
             throw SkipException.ForSkip("Set DEVICE_EVENT_HISTORY_APPHUB_TOKEN to run the live Training AppHub E2E pipeline test.");
         }
 
-        var endpoint = Environment.GetEnvironmentVariable("DEVICE_EVENT_HISTORY_APPHUB_ENDPOINT") ?? DefaultEndpoint;
+        var deviceToken = Environment.GetEnvironmentVariable(
+            "DEVICE_EVENT_HISTORY_APPHUB_DEVICE_TOKEN");
+        if (string.IsNullOrWhiteSpace(deviceToken))
+        {
+            throw SkipException.ForSkip(
+                "Set DEVICE_EVENT_HISTORY_APPHUB_DEVICE_TOKEN to simulate a Device SignalR client.");
+        }
+
+        var endpoint = NormalizeSignalREndpoint(
+            Environment.GetEnvironmentVariable("DEVICE_EVENT_HISTORY_APPHUB_ENDPOINT")
+            ?? DefaultEndpoint);
         var mongoConn = Environment.GetEnvironmentVariable(AppConst.EnvironmentVariables.MongoDbConnectionString)
             ?? "mongodb://localhost:27017";
 
@@ -113,8 +123,8 @@ public sealed class AppHubRealSignalRLiveIntegrationTests
                 SourceId = "erp-apphub-live-e2e",
                 Endpoint = endpoint,
                 HubName = AppConst.AppHub.DefaultHubName,
-                AccessToken = string.Empty,
-                TokenJwt = token,
+                AccessToken = IsJwt(token) ? string.Empty : token,
+                TokenJwt = IsJwt(token) ? token : string.Empty,
                 EnabledEvents = AppConst.AppHub.Callbacks.Registered.ToList(),
                 CompanyId = 2,
                 DedicatedSingleTenant = false
@@ -162,42 +172,33 @@ public sealed class AppHubRealSignalRLiveIntegrationTests
                 TimeProvider.System,
                 healthState,
                 NullLoggerFactory.Instance);
+            var historyColl = mongoContext.GetCollection(AppConst.MongoDb.HistoryCollection);
+            var baselineHistoryCount = await historyColl.CountDocumentsAsync(
+                Builders<BsonDocument>.Filter.Empty);
 
-            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(3));
+            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(15));
             var runTask = runtime.RunAsync(cts.Token);
 
-            // Bắn trực tiếp dữ liệu sự kiện thật vào Admission Queue của runtime
-            var admission = new AppHubEventAdmission(sourceOptions, TimeProvider.System);
-            admission.TryEnqueue(
-                "gen-e2e-live-test",
-                AppConst.AppHub.Callbacks.ReceiveDeviceScanConnect,
-                [
-                    new
-                    {
-                        CompanyId = 2,
-                        DeviceId = 999,
-                        DeviceName = "E2E Live Test Scanner",
-                        GateId = 1,
-                        GateName = "Gate A",
-                        SessionType = 1,
-                        DeviceType = 2,
-                        DateConnected = DateTime.UtcNow.ToString("yyyy-MM-ddTHH:mm:ss")
-                    }
-                ]);
+            await WaitUntilAsync(
+                () => healthState.Snapshot.AvailableSourceCount > 0,
+                TimeSpan.FromSeconds(10));
 
-            // Dùng processor xử lý trực tiếp admission reader để đảm bảo chắc chắn lưu vào MongoDB test
-            var processor = new AppHubEventProcessor(
-                mapperRegistry,
-                persistenceService,
-                "e2e-live-worker",
-                maximumPayloadBytes: 256 * 1024,
-                NullLogger<AppHubEventProcessor>.Instance);
-
-            admission.Complete();
-            await processor.ProcessAsync(sourceOptions.SourceId, admission.Reader, CancellationToken.None);
+            // Scanner thật phát receiveDeviceScanConnect trong lifecycle kết nối.
+            using var deviceConnection = await ConnectDeviceClientAsync(
+                endpoint,
+                deviceToken,
+                deviceId: 999,
+                gateId: 1);
 
             try
             {
+                while (await historyColl.CountDocumentsAsync(
+                           Builders<BsonDocument>.Filter.Empty) <= baselineHistoryCount)
+                {
+                    await Task.Delay(100, cts.Token);
+                }
+
+                cts.Cancel();
                 await runTask;
             }
             catch (OperationCanceledException)
@@ -205,10 +206,11 @@ public sealed class AppHubRealSignalRLiveIntegrationTests
                 // Normal shutdown via cancellation token
             }
 
-            var historyColl = mongoContext.GetCollection(AppConst.MongoDb.HistoryCollection);
             var historyCount = await historyColl.CountDocumentsAsync(Builders<BsonDocument>.Filter.Empty);
 
-            Assert.True(historyCount > 0, "Dữ liệu Canonical Ingestion phải được lưu thành công vào MongoDB!");
+            Assert.True(
+                historyCount > baselineHistoryCount,
+                "AppHub phải phát event mới và Canonical Ingestion phải lưu event vào MongoDB!");
         }
         finally
         {
@@ -220,4 +222,49 @@ public sealed class AppHubRealSignalRLiveIntegrationTests
             }
         }
     }
+
+    private static async Task<HubConnection> ConnectDeviceClientAsync(
+        string endpoint,
+        string token,
+        int deviceId,
+        int gateId)
+    {
+        using var connection = new HubConnection(
+            endpoint,
+            new Dictionary<string, string>
+            {
+                [IsJwt(token) ? "tokenjwt" : "token"] = token,
+                ["sessionType"] = "0",
+                ["DeviceId"] = deviceId.ToString(),
+                ["GateId"] = gateId.ToString()
+            });
+
+        await connection.Start().WaitAsync(TimeSpan.FromSeconds(10));
+        return connection;
+    }
+
+    private static async Task WaitUntilAsync(
+        Func<bool> condition,
+        TimeSpan timeout)
+    {
+        var deadline = DateTime.UtcNow + timeout;
+        while (!condition())
+        {
+            if (DateTime.UtcNow >= deadline)
+            {
+                throw new TimeoutException("Timed out waiting for AppHub receiver connection.");
+            }
+
+            await Task.Delay(100);
+        }
+    }
+
+    private static string NormalizeSignalREndpoint(string endpoint) =>
+        endpoint.TrimEnd('/').EndsWith("/signalr", StringComparison.OrdinalIgnoreCase)
+            ? endpoint.TrimEnd('/')
+            : $"{endpoint.TrimEnd('/')}/signalr";
+
+    private static bool IsJwt(string token) =>
+        token.Count(character => character == '.') == 2;
+
 }
