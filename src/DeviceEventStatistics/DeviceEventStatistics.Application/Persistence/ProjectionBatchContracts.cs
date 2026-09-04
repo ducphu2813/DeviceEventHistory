@@ -1,3 +1,5 @@
+using DeviceEventStatistics.Domain.State;
+
 namespace DeviceEventStatistics.Application.Persistence;
 
 public enum ProjectionEventDisposition
@@ -55,6 +57,44 @@ public sealed record StateObservationInput(
     string ObservedState,
     DateTimeOffset TimelineAtUtc,
     string? OpeningEvidenceKind = null);
+
+public sealed record StateCursorInput(
+    StateStreamKey Key,
+    string CurrentState,
+    DateTimeOffset StateSinceAtUtc,
+    DateTimeOffset AccountedThroughAtUtc,
+    DateTimeOffset LastTimelineAtUtc,
+    string LastEventId,
+    string OpeningEvidenceKind);
+
+public sealed record StateDailyContribution(
+    StateStreamKey Key,
+    DateOnly StatisticsDate,
+    DateTimeOffset BucketStartAtUtc,
+    DateTimeOffset BucketEndAtUtc,
+    DateTimeOffset CalculatedThroughAtUtc,
+    string TimeZoneId,
+    string OpeningState,
+    string ClosingState,
+    long OnlineSeconds,
+    long OfflineSeconds,
+    long UnknownSeconds,
+    long ConnectedEventCount,
+    long DisconnectedEventCount,
+    long ReconnectCount,
+    string OpeningEvidenceKind,
+    string? OpeningEvidenceEventId,
+    bool IsDirty,
+    bool IsFinalized,
+    string CoverageStatus);
+
+public sealed record ReconciliationRequestInput(
+    StateStreamKey Key,
+    DateOnly FromStatisticsDate,
+    DateOnly ToStatisticsDate,
+    string ReasonCode,
+    DateTimeOffset RequestedAtUtc,
+    string EvidenceEventId);
 
 public sealed record QualityContribution(
     string EventId,

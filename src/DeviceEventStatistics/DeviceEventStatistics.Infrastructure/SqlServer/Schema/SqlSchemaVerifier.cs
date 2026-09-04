@@ -8,7 +8,7 @@ public sealed class SqlSchemaVerifier(
     SqlStatisticsDbContext dbContext,
     SqlStatisticsDatabaseOptions options)
 {
-    public const string ExpectedLatestMigrationId = "005_SeedMetricSetV1";
+    public const string ExpectedLatestMigrationId = "006_CreateStatePersistenceContracts";
 
     private static readonly string[] RequiredTables =
     [
@@ -38,6 +38,9 @@ public sealed class SqlSchemaVerifier(
         "ProjectionMetricContributionType",
         "ProjectionDeviceSummaryType",
         "ProjectionStateObservationType",
+        "ProjectionStateDailyType",
+        "ProjectionStateCursorType",
+        "ProjectionReconciliationRequestType",
         "ProjectionQualityContributionType",
         "ProjectionFailureType"
     ];

@@ -1,4 +1,5 @@
 using DeviceEventStatistics.Infrastructure.Configuration;
+using DeviceEventStatistics.Domain.State;
 using Microsoft.Extensions.Options;
 
 namespace DeviceEventStatistics.Worker.Configuration;
@@ -8,6 +9,7 @@ internal static class ConfigurationValidationErrors
     public const string WorkerIdRequired = "STAT-CONFIG-WORKER-ID-REQUIRED";
     public const string ShutdownTimeoutPositive = "STAT-CONFIG-SHUTDOWN-TIMEOUT-POSITIVE";
     public const string ProjectionVersionPositive = "STAT-CONFIG-PROJECTION-VERSION-POSITIVE";
+    public const string MetricSetVersionPositive = "STAT-CONFIG-METRIC-SET-VERSION-POSITIVE";
     public const string ProjectionNameRequired = "STAT-CONFIG-PROJECTION-NAME-REQUIRED";
     public const string MappingVersionRequired = "STAT-CONFIG-MAPPING-VERSION-REQUIRED";
     public const string ModeUnsupported = "STAT-CONFIG-MODE-UNSUPPORTED";
@@ -30,7 +32,10 @@ internal static class ConfigurationValidationErrors
     public const string ScopeIdDuplicated = "STAT-CONFIG-SCOPE-ID-DUPLICATED";
     public const string StateTypeRequired = "STAT-CONFIG-STATE-TYPE-REQUIRED";
     public const string StateTypeDuplicated = "STAT-CONFIG-STATE-TYPE-DUPLICATED";
+    public const string StateTypeUnsupported = "STAT-CONFIG-STATE-TYPE-UNSUPPORTED";
     public const string ForwardPropagationPositive = "STAT-CONFIG-FORWARD-PROPAGATION-POSITIVE";
+    public const string StateRefreshIntervalPositive = "STAT-CONFIG-STATE-REFRESH-INTERVAL-POSITIVE";
+    public const string StateRefreshPageSizePositive = "STAT-CONFIG-STATE-REFRESH-PAGE-SIZE-POSITIVE";
     public const string ReconciliationIntervalPositive = "STAT-CONFIG-RECONCILIATION-INTERVAL-POSITIVE";
     public const string RollingDaysPositive = "STAT-CONFIG-ROLLING-DAYS-POSITIVE";
     public const string RequestsPositive = "STAT-CONFIG-REQUESTS-POSITIVE";
@@ -87,6 +92,7 @@ public sealed class ProjectionOptionsValidator(IOptions<WorkerOptions> workerOpt
         if (!Enum.IsDefined(options.Mode)) failures.Add(ConfigurationValidationErrors.ModeUnsupported);
         if (string.IsNullOrWhiteSpace(options.Name)) failures.Add(ConfigurationValidationErrors.ProjectionNameRequired);
         if (options.ProjectionVersion <= 0) failures.Add(ConfigurationValidationErrors.ProjectionVersionPositive);
+        if (options.MetricSetVersion <= 0) failures.Add(ConfigurationValidationErrors.MetricSetVersionPositive);
         if (string.IsNullOrWhiteSpace(options.MappingVersion)) failures.Add(ConfigurationValidationErrors.MappingVersionRequired);
         if (!options.ResumeFromStoredDefinition && options.CoverageStartAtUtc is null)
         {
@@ -180,12 +186,21 @@ public sealed class StateOptionsValidator(IOptions<WorkerOptions> workerOptions)
         {
             failures.Add(ConfigurationValidationErrors.ForwardPropagationPositive);
         }
+        if (options.RefreshInterval <= TimeSpan.Zero)
+        {
+            failures.Add(ConfigurationValidationErrors.StateRefreshIntervalPositive);
+        }
+        if (options.RefreshPageSize <= 0)
+        {
+            failures.Add(ConfigurationValidationErrors.StateRefreshPageSizePositive);
+        }
 
         var stateTypes = options.StateTypes ?? [];
         var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (var stateType in stateTypes)
         {
             if (string.IsNullOrWhiteSpace(stateType)) failures.Add(ConfigurationValidationErrors.StateTypeRequired);
+            else if (!StateTypes.Supported.Contains(stateType.Trim())) failures.Add(ConfigurationValidationErrors.StateTypeUnsupported);
             else if (!seen.Add(stateType.Trim())) failures.Add(ConfigurationValidationErrors.StateTypeDuplicated);
         }
 

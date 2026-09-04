@@ -97,6 +97,63 @@ public sealed class ProjectionTvpMapper
                 value.TimelineAtUtc.UtcDateTime, value.OpeningEvidenceKind
             });
 
+    public DataTable MapStateDailyContributions(IEnumerable<StateDailyContribution> values) =>
+        CreateTable(
+            new[]
+            {
+            ("CompanyId", typeof(long)), ("DeviceId", typeof(long)), ("StatisticsDate", typeof(DateTime)),
+            ("StateType", typeof(string)), ("BucketStartAtUtc", typeof(DateTime)), ("BucketEndAtUtc", typeof(DateTime)),
+            ("CalculatedThroughAtUtc", typeof(DateTime)), ("TimeZoneId", typeof(string)),
+            ("OpeningState", typeof(string)), ("ClosingState", typeof(string)),
+            ("OnlineSeconds", typeof(long)), ("OfflineSeconds", typeof(long)), ("UnknownSeconds", typeof(long)),
+            ("ConnectedEventCount", typeof(long)), ("DisconnectedEventCount", typeof(long)), ("ReconnectCount", typeof(long)),
+            ("OpeningEvidenceKind", typeof(string)), ("OpeningEvidenceEventId", typeof(byte[])),
+            ("IsDirty", typeof(bool)), ("IsFinalized", typeof(bool)), ("CoverageStatus", typeof(string))
+            },
+            values,
+            value => new object?[]
+            {
+                value.Key.CompanyId, value.Key.DeviceId, value.StatisticsDate.ToDateTime(), value.Key.StateType,
+                value.BucketStartAtUtc.UtcDateTime, value.BucketEndAtUtc.UtcDateTime,
+                value.CalculatedThroughAtUtc.UtcDateTime, value.TimeZoneId, value.OpeningState, value.ClosingState,
+                value.OnlineSeconds, value.OfflineSeconds, value.UnknownSeconds, value.ConnectedEventCount,
+                value.DisconnectedEventCount, value.ReconnectCount, value.OpeningEvidenceKind,
+                value.OpeningEvidenceEventId?.ToEventIdBytes(), value.IsDirty, value.IsFinalized, value.CoverageStatus
+            });
+
+    public DataTable MapStateCursors(IEnumerable<StateCursorInput> values) =>
+        CreateTable(
+            new[]
+            {
+            ("CompanyId", typeof(long)), ("DeviceId", typeof(long)), ("StateType", typeof(string)),
+            ("CurrentState", typeof(string)), ("StateSinceAtUtc", typeof(DateTime)),
+            ("AccountedThroughAtUtc", typeof(DateTime)), ("LastTimelineAtUtc", typeof(DateTime)),
+            ("LastEventId", typeof(byte[])), ("OpeningEvidenceKind", typeof(string))
+            },
+            values,
+            value => new object?[]
+            {
+                value.Key.CompanyId, value.Key.DeviceId, value.Key.StateType, value.CurrentState,
+                value.StateSinceAtUtc.UtcDateTime, value.AccountedThroughAtUtc.UtcDateTime,
+                value.LastTimelineAtUtc.UtcDateTime, value.LastEventId.ToEventIdBytes(), value.OpeningEvidenceKind
+            });
+
+    public DataTable MapReconciliationRequests(IEnumerable<ReconciliationRequestInput> values) =>
+        CreateTable(
+            new[]
+            {
+            ("CompanyId", typeof(long)), ("DeviceId", typeof(long)), ("StateType", typeof(string)),
+            ("FromStatisticsDate", typeof(DateTime)), ("ToStatisticsDate", typeof(DateTime)),
+            ("ReasonCode", typeof(string)), ("RequestedAtUtc", typeof(DateTime)), ("EvidenceEventId", typeof(byte[]))
+            },
+            values,
+            value => new object?[]
+            {
+                value.Key.CompanyId, value.Key.DeviceId, value.Key.StateType,
+                value.FromStatisticsDate.ToDateTime(), value.ToStatisticsDate.ToDateTime(), value.ReasonCode,
+                value.RequestedAtUtc.UtcDateTime, value.EvidenceEventId.ToEventIdBytes()
+            });
+
     public DataTable MapQualityContributions(IEnumerable<QualityContribution> values) =>
         CreateTable(
             new[]

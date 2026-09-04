@@ -29,8 +29,8 @@ public sealed class SqlProjectionLeaseStore(
         var current = await ReadLeaseAsync(connection, transaction, identity, cancellationToken);
         if (current is null)
         {
-            const string insertSql = """
-                INSERT INTO [device_stats].[ProjectionCheckpoint]
+            var insertSql = $"""
+                INSERT INTO {Table("ProjectionCheckpoint")}
                     ([ProjectionName], [ProjectionVersion], [PartitionKey], [LastBatchSize],
                      [LeaseOwner], [LeaseExpiresAtUtc], [LeaseEpoch], [DataRevision], [UpdatedAtUtc])
                 OUTPUT INSERTED.[LeaseEpoch], INSERTED.[LeaseExpiresAtUtc]
@@ -50,8 +50,8 @@ public sealed class SqlProjectionLeaseStore(
         }
 
         var mutationSql = current.IsActive
-            ? """
-                UPDATE [device_stats].[ProjectionCheckpoint]
+            ? $"""
+                UPDATE {Table("ProjectionCheckpoint")}
                 SET [LeaseExpiresAtUtc] = DATEADD(SECOND, @durationSeconds, SYSUTCDATETIME()),
                     [UpdatedAtUtc] = SYSUTCDATETIME()
                 OUTPUT INSERTED.[LeaseEpoch], INSERTED.[LeaseExpiresAtUtc]
@@ -60,8 +60,8 @@ public sealed class SqlProjectionLeaseStore(
                   AND [PartitionKey] = @partitionKey
                   AND [LeaseOwner] = @owner;
                 """
-            : """
-                UPDATE [device_stats].[ProjectionCheckpoint]
+            : $"""
+                UPDATE {Table("ProjectionCheckpoint")}
                 SET [LeaseOwner] = @owner,
                     [LeaseExpiresAtUtc] = DATEADD(SECOND, @durationSeconds, SYSUTCDATETIME()),
                     [LeaseEpoch] = [LeaseEpoch] + 1,
@@ -86,8 +86,8 @@ public sealed class SqlProjectionLeaseStore(
 
         await using var connection = dbContext.CreateConnection();
         await connection.OpenAsync(cancellationToken);
-        const string sql = """
-            UPDATE [device_stats].[ProjectionCheckpoint]
+        var sql = $"""
+            UPDATE {Table("ProjectionCheckpoint")}
             SET [LeaseExpiresAtUtc] = DATEADD(SECOND, @durationSeconds, SYSUTCDATETIME()),
                 [UpdatedAtUtc] = SYSUTCDATETIME()
             OUTPUT INSERTED.[LeaseExpiresAtUtc]
@@ -111,8 +111,8 @@ public sealed class SqlProjectionLeaseStore(
     {
         await using var connection = dbContext.CreateConnection();
         await connection.OpenAsync(cancellationToken);
-        const string sql = """
-            UPDATE [device_stats].[ProjectionCheckpoint]
+        var sql = $"""
+            UPDATE {Table("ProjectionCheckpoint")}
             SET [LeaseOwner] = NULL,
                 [LeaseExpiresAtUtc] = NULL,
                 [UpdatedAtUtc] = SYSUTCDATETIME()
@@ -134,7 +134,7 @@ public sealed class SqlProjectionLeaseStore(
     {
         await using var command = connection.CreateCommand();
         command.Transaction = transaction;
-        command.CommandText = """
+        command.CommandText = $"""
             DECLARE @result int;
             EXEC @result = sp_getapplock
                 @Resource = @resource,
@@ -164,7 +164,7 @@ public sealed class SqlProjectionLeaseStore(
         command.CommandText = """
             SELECT [LeaseOwner], [LeaseExpiresAtUtc], [LeaseEpoch],
                    CASE WHEN [LeaseExpiresAtUtc] > SYSUTCDATETIME() THEN 1 ELSE 0 END
-            FROM [device_stats].[ProjectionCheckpoint] WITH (UPDLOCK, HOLDLOCK)
+            FROM {Table("ProjectionCheckpoint")} WITH (UPDLOCK, HOLDLOCK)
             WHERE [ProjectionName] = @projectionName
               AND [ProjectionVersion] = @projectionVersion
               AND [PartitionKey] = @partitionKey;
@@ -233,6 +233,9 @@ public sealed class SqlProjectionLeaseStore(
 
     private static DateTimeOffset ToUtcDateTimeOffset(DateTime value) =>
         new(DateTime.SpecifyKind(value, DateTimeKind.Utc));
+
+    private string Table(string tableName) =>
+        $"[{options.SchemaName}].[{tableName}]";
 
     private sealed record LeaseState(string? Owner, DateTimeOffset? ExpiresAtUtc, long Epoch, bool IsActive);
 }

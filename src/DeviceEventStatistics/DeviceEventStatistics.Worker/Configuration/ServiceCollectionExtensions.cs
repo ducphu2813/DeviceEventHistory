@@ -14,7 +14,10 @@ using DeviceEventStatistics.Application.Mapping;
 using DeviceEventStatistics.Application.Metadata;
 using DeviceEventStatistics.Application.Time;
 using DeviceEventStatistics.Application.Projection;
+using DeviceEventStatistics.Application.Persistence;
+using DeviceEventStatistics.Domain.State;
 using DeviceEventStatistics.Worker.HealthChecks;
+using DeviceEventStatistics.Worker.Orchestration;
 using Microsoft.Extensions.Options;
 using MongoDB.Driver;
 
@@ -141,6 +144,21 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<ProjectionTvpMapper>();
         services.AddSingleton<SqlRetryPolicy>();
         services.AddSingleton<SqlProjectionBatchOperations>();
+        services.AddSingleton<IMetricKeyResolver, SqlMetricKeyResolver>();
+        services.AddSingleton<IncrementalProjectionHandler>();
+        services.AddSingleton<StatisticsProjectionPipeline>();
+        services.AddSingleton(serviceProvider =>
+        {
+            var options = serviceProvider.GetRequiredService<IOptions<ProjectionOptions>>().Value;
+            return new SqlProjectionWriterOptions(
+                options.PersistenceRetryCount,
+                options.RetryMinDelay,
+                options.RetryMaxDelay);
+        });
+        services.AddSingleton<IStatisticsBatchWriter, SqlStatisticsBatchWriter>();
+        services.AddSingleton<IDurationRefreshStore, SqlDurationRefreshStore>();
+        services.AddSingleton<ProjectionLeaseCoordinator>();
+        services.AddSingleton<StateDurationCalculator>();
         services.AddSingleton<IProjectionLeaseStore, SqlProjectionLeaseStore>();
         services.AddSingleton<IProjectionCheckpointStore, SqlProjectionCheckpointStore>();
 

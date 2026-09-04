@@ -32,4 +32,15 @@ public sealed class LocalStatisticsDateResolver
             new DateTimeOffset(nextLocalStart, LocalOffset).ToUniversalTime(),
             TimeZoneId);
     }
+
+    public StatisticsBucket Resolve(DateOnly statisticsDate)
+    {
+        var localStart = statisticsDate.ToDateTime(TimeOnly.MinValue, DateTimeKind.Unspecified);
+        var nextLocalStart = statisticsDate.AddDays(1).ToDateTime(TimeOnly.MinValue, DateTimeKind.Unspecified);
+        return new StatisticsBucket(
+            statisticsDate,
+            new DateTimeOffset(localStart, LocalOffset).ToUniversalTime(),
+            new DateTimeOffset(nextLocalStart, LocalOffset).ToUniversalTime(),
+            TimeZoneId);
+    }
 }

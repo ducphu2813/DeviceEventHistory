@@ -30,6 +30,18 @@ public sealed record ProjectionCheckpoint(
     long DataRevision = 0,
     byte[]? RowVersion = null);
 
+public sealed record IncrementalProjectionOptions(
+    ProjectionIdentity Identity,
+    string MappingVersion,
+    int MetricSetVersion,
+    DateTimeOffset CoverageStartAtUtc,
+    int BatchSize,
+    int MaxContributionsPerBatch,
+    TimeSpan OverlapWindow,
+    TimeSpan ReadSafetyDelay,
+    IReadOnlyCollection<long> CompanyIds,
+    IReadOnlyCollection<long> DeviceIds);
+
 public sealed record LeaseAcquireResult(
     bool Acquired,
     ProjectionLeaseToken? Lease,

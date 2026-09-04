@@ -22,8 +22,8 @@ public sealed class SqlProjectionCheckpointStore(
         {
             await using var insert = connection.CreateCommand();
             insert.Transaction = transaction;
-            insert.CommandText = """
-                INSERT INTO [device_stats].[ProjectionCheckpoint]
+            insert.CommandText = $"""
+                INSERT INTO {Table("ProjectionCheckpoint")}
                     ([ProjectionName], [ProjectionVersion], [PartitionKey], [LastBatchSize],
                      [LeaseEpoch], [DataRevision], [UpdatedAtUtc])
                 VALUES (@projectionName, @projectionVersion, @partitionKey, 0, 0, 0, SYSUTCDATETIME());
@@ -67,6 +67,51 @@ public sealed class SqlProjectionCheckpointStore(
         CancellationToken cancellationToken = default) =>
         AdvanceAsync(session.Connection, session.Transaction, expected, next, lease, cancellationToken);
 
+    public async Task<bool> IsEquivalentAsync(
+        SqlProjectionSession session,
+        ProjectionCheckpoint checkpoint,
+        ProjectionLeaseToken lease,
+        bool allowOneRevisionAhead = false,
+        CancellationToken cancellationToken = default)
+    {
+        if (checkpoint.Identity != lease.Identity)
+        {
+            return false;
+        }
+
+        await using var command = session.Connection.CreateCommand();
+        command.Transaction = session.Transaction;
+        command.CommandText = $"""
+            SELECT [LastPersistedAtUtc], [LastEventId], [LastProcessedAtUtc], [LastBatchSize],
+                   [SweepFromAtUtc], [SweepToAtUtc], [SweepLastPersistedAtUtc], [SweepLastEventId],
+                   [DataRevision]
+            FROM {Table("ProjectionCheckpoint")}
+            WHERE [ProjectionName] = @projectionName
+              AND [ProjectionVersion] = @projectionVersion
+              AND [PartitionKey] = @partitionKey
+              AND [LeaseOwner] = @owner
+              AND [LeaseEpoch] = @epoch
+              AND [LeaseExpiresAtUtc] > SYSUTCDATETIME();
+            """;
+        command.CommandTimeout = options.CommandTimeoutSeconds;
+        AddIdentityParameters(command, checkpoint.Identity);
+        command.Parameters.Add(new SqlParameter("@owner", lease.Owner));
+        command.Parameters.Add(new SqlParameter("@epoch", lease.Epoch));
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+        if (!await reader.ReadAsync(cancellationToken)) return false;
+
+        return DateEquals(reader, 0, checkpoint.LastPersistedAtUtc) &&
+               StringEquals(reader, 1, checkpoint.LastEventId) &&
+               DateEquals(reader, 2, checkpoint.LastProcessedAtUtc) &&
+               reader.GetInt32(3) == checkpoint.LastBatchSize &&
+               DateEquals(reader, 4, checkpoint.SweepFromAtUtc) &&
+               DateEquals(reader, 5, checkpoint.SweepToAtUtc) &&
+               DateEquals(reader, 6, checkpoint.SweepLastPersistedAtUtc) &&
+               StringEquals(reader, 7, checkpoint.SweepLastEventId) &&
+               (reader.GetInt64(8) == checkpoint.DataRevision ||
+                allowOneRevisionAhead && reader.GetInt64(8) == checkpoint.DataRevision + 1);
+    }
+
     private async Task<bool> AdvanceAsync(
         SqlConnection connection,
         SqlTransaction transaction,
@@ -83,8 +128,8 @@ public sealed class SqlProjectionCheckpointStore(
 
         await using var command = connection.CreateCommand();
         command.Transaction = transaction;
-        command.CommandText = """
-            UPDATE [device_stats].[ProjectionCheckpoint]
+        command.CommandText = $"""
+            UPDATE {Table("ProjectionCheckpoint")}
             SET [LastPersistedAtUtc] = @lastPersistedAtUtc,
                 [LastEventId] = @lastEventId,
                 [LastProcessedAtUtc] = @lastProcessedAtUtc,
@@ -128,11 +173,11 @@ public sealed class SqlProjectionCheckpointStore(
     {
         await using var command = connection.CreateCommand();
         command.Transaction = transaction;
-        command.CommandText = """
+        command.CommandText = $"""
             SELECT [LastPersistedAtUtc], [LastEventId], [LastProcessedAtUtc], [LastBatchSize],
                    [SweepFromAtUtc], [SweepToAtUtc], [SweepLastPersistedAtUtc], [SweepLastEventId],
                    [DataRevision], [Version]
-            FROM [device_stats].[ProjectionCheckpoint] WITH (UPDLOCK, HOLDLOCK)
+            FROM {Table("ProjectionCheckpoint")} WITH (UPDLOCK, HOLDLOCK)
             WHERE [ProjectionName] = @projectionName
               AND [ProjectionVersion] = @projectionVersion
               AND [PartitionKey] = @partitionKey;
@@ -171,4 +216,13 @@ public sealed class SqlProjectionCheckpointStore(
 
     private static void AddStringParameter(SqlCommand command, string name, string? value) =>
         command.Parameters.Add(new SqlParameter(name, (object?)value ?? DBNull.Value));
+
+    private static bool DateEquals(SqlDataReader reader, int ordinal, DateTimeOffset? expected) =>
+        (reader.IsDBNull(ordinal) ? null : ReadDate(reader, ordinal)) == expected;
+
+    private static bool StringEquals(SqlDataReader reader, int ordinal, string? expected) =>
+        (reader.IsDBNull(ordinal) ? null : reader.GetString(ordinal)) == expected;
+
+    private string Table(string tableName) =>
+        $"[{options.SchemaName}].[{tableName}]";
 }

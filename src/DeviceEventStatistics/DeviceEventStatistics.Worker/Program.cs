@@ -2,6 +2,7 @@ using DeviceEventStatistics.Infrastructure.Configuration;
 using DeviceEventStatistics.Domain.Common;
 using DeviceEventStatistics.Worker.Configuration;
 using DeviceEventStatistics.Worker.HostedServices;
+using DeviceEventStatistics.Worker.Orchestration;
 using Microsoft.Extensions.Options;
 
 var builder = Host.CreateApplicationBuilder(args);
@@ -10,6 +11,9 @@ builder.Services.AddDeviceEventStatisticsInfrastructure();
 builder.Services.AddDeviceEventStatisticsObservability();
 builder.Services.AddHostedService<StartupInitializationHostedService>();
 builder.Services.AddHostedService<DisabledWorkerHostedService>();
+builder.Services.AddHostedService<IncrementalProjectionHostedService>();
+builder.Services.AddHostedService<LeaseHeartbeatHostedService>();
+builder.Services.AddHostedService<DurationRefreshHostedService>();
 
 var host = builder.Build();
 

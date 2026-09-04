@@ -73,6 +73,34 @@ public static class StatisticsContractConstants
             "STAT-LEASE-APPLOCK-UNAVAILABLE: Projection writer gate is currently held.";
         public const string MSG_SQL_LEASE_MUTATION_FAILED =
             "STAT-LEASE-MUTATION-FAILED: Lease mutation affected no checkpoint.";
+        public const string MSG_PROJECTION_BATCH_INVALID =
+            "STAT-PROJECTION-BATCH-INVALID: Projection batch contains an invalid or conflicting event outcome.";
+        public const string MSG_PROJECTION_CONTRIBUTION_LIMIT =
+            "STAT-PROJECTION-CONTRIBUTION-LIMIT: Projection batch contains {0} contributions; configured limit is {1}.";
+        public const string MSG_PROJECTION_CHECKPOINT_CONFLICT =
+            "STAT-PROJECTION-CHECKPOINT-CONFLICT: Projection checkpoint could not be advanced for the active lease.";
+        public const string MSG_STATE_BUCKET_REQUIRED =
+            "STAT-STATE-BUCKET-REQUIRED: State duration calculation requires at least one bucket.";
+        public const string MSG_STATE_CURSOR_TYPE_INVALID =
+            "STAT-STATE-CURSOR-TYPE-INVALID: State cursor type is not supported.";
+        public const string MSG_STATE_OBSERVATION_INVALID =
+            "STAT-STATE-OBSERVATION-INVALID: State observation contract is invalid.";
+        public const string MSG_STATE_STREAM_MISMATCH =
+            "STAT-STATE-STREAM-MISMATCH: State observations must belong to the cursor stream.";
+        public const string MSG_PROJECTION_METRIC_KEY_MISSING =
+            "STAT-PROJECTION-METRIC-KEY-MISSING: Metric definitions are missing for metric codes: {0}.";
+        public const string MSG_PROJECTION_COVERAGE_START_MISSING =
+            "STAT-PROJECTION-COVERAGE-START-MISSING: Incremental projection requires CoverageStartAtUtc when no stored definition resolver is configured.";
+        public const string MSG_LOG_PROJECTION_LEASE_ACQUIRED =
+            "Statistics projection lease acquired. Epoch={Epoch}, ExpiresAtUtc={ExpiresAtUtc}.";
+        public const string MSG_LOG_PROJECTION_LEASE_UNAVAILABLE =
+            "Statistics projection lease is held by another worker; retrying.";
+        public const string MSG_LOG_PROJECTION_BATCH_COMMITTED =
+            "Statistics projection batch committed. Read={ReadCount}, New={NewCount}, Duplicate={DuplicateCount}, AffectedRows={AffectedRows}, DataRevision={DataRevision}.";
+        public const string MSG_LOG_PROJECTION_FAILED =
+            "Statistics projection batch failed; checkpoint was not advanced.";
+        public const string MSG_LOG_STATE_REFRESH_COMPLETED =
+            "Statistics state duration refresh committed. AffectedRows={AffectedRows}.";
         public const string MSG_EVENT_ID_INVALID =
             "STAT-EVENT-ID-INVALID: Event identity must be 64 lowercase hexadecimal characters.";
         public const string MSG_STARTUP_CANCELLED =

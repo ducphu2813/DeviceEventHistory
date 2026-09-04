@@ -32,7 +32,8 @@ public sealed record ProjectionSweep(
         ProjectionCheckpoint checkpoint,
         SourceCursor? lastPageCursor,
         int pageSize,
-        bool pageIsComplete)
+        bool pageIsComplete,
+        DateTimeOffset? processedAtUtc = null)
     {
         if (!pageIsComplete)
         {
@@ -51,7 +52,7 @@ public sealed record ProjectionSweep(
         {
             LastPersistedAtUtc = highWatermark?.PersistedAtUtc,
             LastEventId = highWatermark?.EventId,
-            LastProcessedAtUtc = DateTimeOffset.UtcNow,
+            LastProcessedAtUtc = processedAtUtc ?? DateTimeOffset.UtcNow,
             LastBatchSize = pageSize,
             SweepFromAtUtc = null,
             SweepToAtUtc = null,

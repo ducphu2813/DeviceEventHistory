@@ -8,6 +8,7 @@ public sealed class AppHubConnectionMetricMapper : IDeviceMetricMapper
     public IReadOnlyCollection<string> Keys { get; } =
     [
         MetricMapperKeyExtensions.CreateKey("erp_apphub", "device_connection", "receiveStateConnected", "connection"),
+        MetricMapperKeyExtensions.CreateKey("erp_apphub", "device_connection", "receiveStateDisconnected", "connection"),
         MetricMapperKeyExtensions.CreateKey("erp_apphub", "scanner_connection", "receiveDeviceScanConnect", "connection"),
         MetricMapperKeyExtensions.CreateKey("erp_apphub", "scanner_connection", "receiveDeviceScanDisconnect", "connection")
     ];

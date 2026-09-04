@@ -12,6 +12,14 @@ public interface IDeviceMetricMapper
         StatisticsBucket bucket);
 }
 
+public interface IMetricKeyResolver
+{
+    Task<IReadOnlyDictionary<string, int>> ResolveAsync(
+        int metricSetVersion,
+        IReadOnlyCollection<string> metricCodes,
+        CancellationToken cancellationToken = default);
+}
+
 public static class MetricMapperKey
 {
     public static string Create(HistoryEvent historyEvent, string factsDiscriminator) =>

@@ -29,6 +29,8 @@ public sealed class ProjectionOptions
 
     public int ProjectionVersion { get; set; } = 1;
 
+    public int MetricSetVersion { get; set; } = 1;
+
     public string MappingVersion { get; set; } = "v1";
 
     public bool ResumeFromStoredDefinition { get; set; }
@@ -86,6 +88,10 @@ public sealed class StateOptions
         ["device_connection", "scanner_connection"];
 
     public int MaxForwardPropagationDays { get; set; } = 31;
+
+    public TimeSpan RefreshInterval { get; set; } = TimeSpan.FromMinutes(1);
+
+    public int RefreshPageSize { get; set; } = 100;
 }
 
 public sealed class ReconciliationOptions
