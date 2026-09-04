@@ -163,10 +163,10 @@ public sealed class ConfigurationValidationTests
             new AntennaSourceOptions
             {
                 SourceId = "antenna-site-a",
-                RootPath = "D:/RFID/RawData",
+                RootPath = Path.GetFullPath("/RFID/RawData"),
                 CompanyId = 2,
                 TimeZoneId = "UTC",
-            FilePattern = AppConst.RawLog.DefaultFilePattern
+                FilePattern = AppConst.RawLog.DefaultFilePattern
             }
         ]
     };
