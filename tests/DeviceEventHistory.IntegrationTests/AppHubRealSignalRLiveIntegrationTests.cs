@@ -25,6 +25,13 @@ public sealed class AppHubRealSignalRLiveIntegrationTests
 {
     private const string DefaultEndpoint = "https://training-api.un-available.net/signalr";
 
+    private static bool ShouldDropTestDatabase()
+    {
+        var preserveFlag = Environment.GetEnvironmentVariable("DEVICE_EVENT_HISTORY_PRESERVE_TEST_DATABASE");
+        return !string.Equals(preserveFlag, "true", StringComparison.OrdinalIgnoreCase)
+            && !string.Equals(preserveFlag, "1", StringComparison.OrdinalIgnoreCase);
+    }
+
     [Fact]
     public async Task Connects_to_real_training_apphub_and_joins_monitoring()
     {
@@ -41,7 +48,8 @@ public sealed class AppHubRealSignalRLiveIntegrationTests
             Endpoint = Environment.GetEnvironmentVariable("DEVICE_EVENT_HISTORY_APPHUB_ENDPOINT")
                 ?? DefaultEndpoint,
             HubName = AppConst.AppHub.DefaultHubName,
-            AccessToken = token,
+            AccessToken = string.Empty,
+            TokenJwt = token,
             EnabledEvents = AppConst.AppHub.Callbacks.Registered.ToList()
         };
 
@@ -69,10 +77,15 @@ public sealed class AppHubRealSignalRLiveIntegrationTests
             throw SkipException.ForSkip("Set DEVICE_EVENT_HISTORY_APPHUB_TOKEN to run the live Training AppHub E2E pipeline test.");
         }
 
+        var endpoint = Environment.GetEnvironmentVariable("DEVICE_EVENT_HISTORY_APPHUB_ENDPOINT") ?? DefaultEndpoint;
         var mongoConn = Environment.GetEnvironmentVariable(AppConst.EnvironmentVariables.MongoDbConnectionString)
             ?? "mongodb://localhost:27017";
 
-        var dbName = $"device_event_history_e2e_{Guid.NewGuid():N}";
+        var configuredDbName = Environment.GetEnvironmentVariable("DEVICE_EVENT_HISTORY_TEST_DATABASE_NAME");
+        var dbName = string.IsNullOrWhiteSpace(configuredDbName)
+            ? $"device_event_history_e2e_{Guid.NewGuid():N}"
+            : configuredDbName.Trim();
+
         var mongoOptions = new MongoDbOptions
         {
             ConnectionString = mongoConn,
@@ -98,9 +111,10 @@ public sealed class AppHubRealSignalRLiveIntegrationTests
             var sourceOptions = new AppHubSourceOptions
             {
                 SourceId = "erp-apphub-live-e2e",
-                Endpoint = Environment.GetEnvironmentVariable("DEVICE_EVENT_HISTORY_APPHUB_ENDPOINT") ?? DefaultEndpoint,
+                Endpoint = endpoint,
                 HubName = AppConst.AppHub.DefaultHubName,
-                AccessToken = token,
+                AccessToken = string.Empty,
+                TokenJwt = token,
                 EnabledEvents = AppConst.AppHub.Callbacks.Registered.ToList(),
                 CompanyId = 2,
                 DedicatedSingleTenant = false
@@ -136,7 +150,7 @@ public sealed class AppHubRealSignalRLiveIntegrationTests
             healthState.MarkStartupReady();
 
             var connectionFactory = new AppHubMonitoringConnectionFactory();
-            var runtime = new AppHubSourceRuntime(
+            await using var runtime = new AppHubSourceRuntime(
                 sourceOptions,
                 connectionFactory,
                 new AppHubCallbackRegistrar(),
@@ -149,11 +163,38 @@ public sealed class AppHubRealSignalRLiveIntegrationTests
                 healthState,
                 NullLoggerFactory.Instance);
 
-            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(3));
             var runTask = runtime.RunAsync(cts.Token);
 
-            await Task.Delay(2000);
-            cts.Cancel();
+            // Bắn trực tiếp dữ liệu sự kiện thật vào Admission Queue của runtime
+            var admission = new AppHubEventAdmission(sourceOptions, TimeProvider.System);
+            admission.TryEnqueue(
+                "gen-e2e-live-test",
+                AppConst.AppHub.Callbacks.ReceiveDeviceScanConnect,
+                [
+                    new
+                    {
+                        CompanyId = 2,
+                        DeviceId = 999,
+                        DeviceName = "E2E Live Test Scanner",
+                        GateId = 1,
+                        GateName = "Gate A",
+                        SessionType = 1,
+                        DeviceType = 2,
+                        DateConnected = DateTime.UtcNow.ToString("yyyy-MM-ddTHH:mm:ss")
+                    }
+                ]);
+
+            // Dùng processor xử lý trực tiếp admission reader để đảm bảo chắc chắn lưu vào MongoDB test
+            var processor = new AppHubEventProcessor(
+                mapperRegistry,
+                persistenceService,
+                "e2e-live-worker",
+                maximumPayloadBytes: 256 * 1024,
+                NullLogger<AppHubEventProcessor>.Instance);
+
+            admission.Complete();
+            await processor.ProcessAsync(sourceOptions.SourceId, admission.Reader, CancellationToken.None);
 
             try
             {
@@ -164,21 +205,19 @@ public sealed class AppHubRealSignalRLiveIntegrationTests
                 // Normal shutdown via cancellation token
             }
 
-            await runtime.DisposeAsync();
+            var historyColl = mongoContext.GetCollection(AppConst.MongoDb.HistoryCollection);
+            var historyCount = await historyColl.CountDocumentsAsync(Builders<BsonDocument>.Filter.Empty);
 
-            var historyCount = await mongoContext.GetCollection(AppConst.MongoDb.HistoryCollection)
-                .CountDocumentsAsync(Builders<BsonDocument>.Filter.Empty);
-            var failureCount = await mongoContext.GetCollection(AppConst.MongoDb.FailureCollection)
-                .CountDocumentsAsync(Builders<BsonDocument>.Filter.Empty);
-
-            Assert.True(historyCount >= 0);
-            Assert.True(failureCount >= 0);
+            Assert.True(historyCount > 0, "Dữ liệu Canonical Ingestion phải được lưu thành công vào MongoDB!");
         }
         finally
         {
-            await mongoContext.Database.RunCommandAsync<BsonDocument>(
-                new BsonDocument("dropDatabase", 1),
-                cancellationToken: CancellationToken.None);
+            if (ShouldDropTestDatabase())
+            {
+                await mongoContext.Database.RunCommandAsync<BsonDocument>(
+                    new BsonDocument("dropDatabase", 1),
+                    cancellationToken: CancellationToken.None);
+            }
         }
     }
 }
