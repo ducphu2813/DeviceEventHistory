@@ -1,4 +1,5 @@
 using DeviceEventStatistics.Infrastructure.Configuration;
+using DeviceEventStatistics.Domain.Common;
 using MongoDB.Bson;
 using MongoDB.Driver;
 
@@ -18,7 +19,9 @@ public sealed class MongoHistoryIndexVerifier(
         if (cursorIndex is null || !HasCursorKeys(cursorIndex))
         {
             throw new InvalidOperationException(
-                $"STAT-MONGO-CURSOR-INDEX-MISSING: History index '{CursorIndexName}' must contain persistedAtUtc ASC, eventId ASC.");
+                StatisticsContractConstants.Messages.Format(
+                    StatisticsContractConstants.Messages.MSG_MONGO_CURSOR_INDEX_MISSING,
+                    CursorIndexName));
         }
     }
 

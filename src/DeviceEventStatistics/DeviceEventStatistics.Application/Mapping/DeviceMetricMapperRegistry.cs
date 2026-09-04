@@ -1,5 +1,6 @@
 using DeviceEventStatistics.Application.History;
 using DeviceEventStatistics.Application.Time;
+using DeviceEventStatistics.Domain.Common;
 
 namespace DeviceEventStatistics.Application.Mapping;
 
@@ -17,7 +18,9 @@ public sealed class DeviceMetricMapperRegistry
                 if (!entries.TryAdd(key, mapper))
                 {
                     throw new InvalidOperationException(
-                        $"STAT-METRIC-MAPPER-DUPLICATE: Mapping key '{key}' is registered more than once.");
+                        StatisticsContractConstants.Messages.Format(
+                            StatisticsContractConstants.Messages.MSG_METRIC_MAPPER_DUPLICATE,
+                            key));
                 }
             }
         }

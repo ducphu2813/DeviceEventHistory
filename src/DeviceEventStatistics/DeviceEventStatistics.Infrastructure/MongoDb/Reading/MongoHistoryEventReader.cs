@@ -1,5 +1,6 @@
 using DeviceEventStatistics.Application.History;
 using DeviceEventStatistics.Infrastructure.MongoDb.Mapping;
+using DeviceEventStatistics.Domain.Common;
 using MongoDB.Bson;
 using MongoDB.Driver;
 
@@ -22,7 +23,8 @@ public sealed class MongoHistoryEventReader(
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(pageSize);
         if (fromPersistedAtUtc > toPersistedAtUtc)
         {
-            throw new ArgumentException("The persisted time range must be ordered.");
+            throw new ArgumentException(
+                StatisticsContractConstants.Messages.MSG_MONGO_RANGE_INVALID);
         }
 
         using var cursor = await context.HistoryCollection.FindAsync(

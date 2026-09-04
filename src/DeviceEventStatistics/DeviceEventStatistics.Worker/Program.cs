@@ -1,4 +1,5 @@
 using DeviceEventStatistics.Infrastructure.Configuration;
+using DeviceEventStatistics.Domain.Common;
 using DeviceEventStatistics.Worker.Configuration;
 using DeviceEventStatistics.Worker.HostedServices;
 using Microsoft.Extensions.Options;
@@ -22,7 +23,7 @@ var summary = redactor.CreateSummary(
     host.Services.GetRequiredService<IOptions<DatabaseSettingsOptions>>().Value);
 
 logger.LogInformation(
-    "Statistics configuration validated. Enabled={Enabled}, WorkerId={WorkerId}, Mode={Mode}, ProjectionName={ProjectionName}, ProjectionVersion={ProjectionVersion}, MongoConnectionStringConfigured={MongoConnectionStringConfigured}, MongoDatabase={MongoDatabase}, HistoryCollection={HistoryCollection}, SqlConnectionStringConfigured={SqlConnectionStringConfigured}, SqlDatabase={SqlDatabase}, SqlSchema={SqlSchema}, CompanyScopeCount={CompanyScopeCount}, DeviceScopeCount={DeviceScopeCount}",
+    StatisticsContractConstants.Messages.MSG_LOG_CONFIGURATION_VALIDATED,
     summary.Enabled,
     summary.WorkerId,
     summary.ProjectionMode,

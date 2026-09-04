@@ -1,4 +1,5 @@
 using DeviceEventStatistics.Infrastructure.Configuration;
+using DeviceEventStatistics.Domain.Common;
 using Microsoft.Data.SqlClient;
 
 namespace DeviceEventStatistics.Infrastructure.SqlServer;
@@ -34,7 +35,8 @@ public sealed class SqlStatisticsDbContext(SqlStatisticsDatabaseOptions options)
         await using var reader = await command.ExecuteReaderAsync(cancellationToken);
         if (!await reader.ReadAsync(cancellationToken))
         {
-            throw new InvalidOperationException("STAT-SQL-TARGET-UNVERIFIED: SQL target verification returned no result.");
+            throw new InvalidOperationException(
+                StatisticsContractConstants.Messages.MSG_SQL_TARGET_UNVERIFIED);
         }
 
         var databaseName = reader.IsDBNull(0) ? string.Empty : reader.GetString(0);
@@ -42,13 +44,19 @@ public sealed class SqlStatisticsDbContext(SqlStatisticsDatabaseOptions options)
         if (!string.Equals(databaseName, options.DatabaseName, StringComparison.OrdinalIgnoreCase))
         {
             throw new InvalidOperationException(
-                $"STAT-SQL-DATABASE-MISMATCH: Connected to '{databaseName}', expected '{options.DatabaseName}'.");
+                StatisticsContractConstants.Messages.Format(
+                    StatisticsContractConstants.Messages.MSG_SQL_DATABASE_MISMATCH,
+                    databaseName,
+                    options.DatabaseName));
         }
 
         if (schemaId is null)
         {
             throw new InvalidOperationException(
-                $"STAT-SQL-SCHEMA-MISSING: Schema '{options.SchemaName}' was not found in database '{options.DatabaseName}'.");
+                StatisticsContractConstants.Messages.Format(
+                    StatisticsContractConstants.Messages.MSG_SQL_SCHEMA_MISSING,
+                    options.SchemaName,
+                    options.DatabaseName));
         }
     }
 

@@ -112,10 +112,10 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<HistoryEventEligibilityPolicy>();
         services.AddSingleton<EventOwnershipPolicy>();
         services.AddSingleton<ProjectionEventOutcomeMapper>();
-        services.AddSingleton<VietnamStatisticsDateResolver>(serviceProvider =>
+        services.AddSingleton<LocalStatisticsDateResolver>(serviceProvider =>
         {
             var options = serviceProvider.GetRequiredService<IOptions<MetadataOptions>>().Value;
-            return new VietnamStatisticsDateResolver(options.TimeZoneId);
+            return new LocalStatisticsDateResolver(options.TimeZoneId);
         });
         services.AddSingleton<IDeviceMetadataResolver>(serviceProvider =>
         {

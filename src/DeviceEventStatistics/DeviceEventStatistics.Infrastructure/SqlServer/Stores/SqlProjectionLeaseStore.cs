@@ -1,5 +1,6 @@
 using System.Data;
 using DeviceEventStatistics.Application.Projection;
+using DeviceEventStatistics.Domain.Common;
 using DeviceEventStatistics.Infrastructure.Configuration;
 using Microsoft.Data.SqlClient;
 
@@ -147,7 +148,8 @@ public sealed class SqlProjectionLeaseStore(
         var result = Convert.ToInt32(await command.ExecuteScalarAsync(cancellationToken));
         if (result < 0)
         {
-            throw new InvalidOperationException("STAT-LEASE-APPLOCK-UNAVAILABLE: Projection writer gate is currently held.");
+            throw new InvalidOperationException(
+                StatisticsContractConstants.Messages.MSG_SQL_LEASE_APPLOCK_UNAVAILABLE);
         }
     }
 
@@ -191,7 +193,8 @@ public sealed class SqlProjectionLeaseStore(
         await using var reader = await command.ExecuteReaderAsync(cancellationToken);
         if (!await reader.ReadAsync(cancellationToken))
         {
-            throw new InvalidOperationException("STAT-LEASE-MUTATION-FAILED: Lease mutation affected no checkpoint.");
+            throw new InvalidOperationException(
+                StatisticsContractConstants.Messages.MSG_SQL_LEASE_MUTATION_FAILED);
         }
 
         return (reader.GetInt64(0), ToUtcDateTimeOffset(reader.GetDateTime(1)));

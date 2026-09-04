@@ -1,4 +1,5 @@
 using DeviceEventStatistics.Infrastructure.Configuration;
+using DeviceEventStatistics.Domain.Common;
 using Microsoft.Data.SqlClient;
 
 namespace DeviceEventStatistics.Infrastructure.SqlServer.Schema;
@@ -62,7 +63,9 @@ public sealed class SqlSchemaVerifier(
         if (await command.ExecuteScalarAsync(cancellationToken) is null or DBNull)
         {
             throw new InvalidOperationException(
-                $"STAT-SQL-SCHEMA-MISSING: Schema '{options.SchemaName}' was not found.");
+                StatisticsContractConstants.Messages.Format(
+                    StatisticsContractConstants.Messages.MSG_SQL_SCHEMA_MISSING_WITHOUT_DATABASE,
+                    options.SchemaName));
         }
     }
 
@@ -80,7 +83,9 @@ public sealed class SqlSchemaVerifier(
         if (checksum is null or DBNull)
         {
             throw new InvalidOperationException(
-                $"STAT-SQL-MIGRATION-MISSING: Expected migration '{ExpectedLatestMigrationId}' was not applied.");
+                StatisticsContractConstants.Messages.Format(
+                    StatisticsContractConstants.Messages.MSG_SQL_MIGRATION_MISSING,
+                    ExpectedLatestMigrationId));
         }
     }
 
@@ -102,7 +107,9 @@ public sealed class SqlSchemaVerifier(
         if (missingTables.Length > 0)
         {
             throw new InvalidOperationException(
-                $"STAT-SQL-TABLES-MISSING: Required tables are missing: {string.Join(", ", missingTables)}.");
+                StatisticsContractConstants.Messages.Format(
+                    StatisticsContractConstants.Messages.MSG_SQL_TABLES_MISSING,
+                    string.Join(", ", missingTables)));
         }
     }
 
@@ -124,7 +131,9 @@ public sealed class SqlSchemaVerifier(
         if (missingTypes.Length > 0)
         {
             throw new InvalidOperationException(
-                $"STAT-SQL-TYPES-MISSING: Required table types are missing: {string.Join(", ", missingTypes)}.");
+                StatisticsContractConstants.Messages.Format(
+                    StatisticsContractConstants.Messages.MSG_SQL_TYPES_MISSING,
+                    string.Join(", ", missingTypes)));
         }
     }
 
@@ -140,7 +149,7 @@ public sealed class SqlSchemaVerifier(
         if (Convert.ToInt64(await command.ExecuteScalarAsync(cancellationToken)) == 0)
         {
             throw new InvalidOperationException(
-                "STAT-SQL-METRIC-REGISTRY-MISSING: Metric set version 1 has not been seeded.");
+                StatisticsContractConstants.Messages.MSG_SQL_METRIC_REGISTRY_MISSING);
         }
     }
 

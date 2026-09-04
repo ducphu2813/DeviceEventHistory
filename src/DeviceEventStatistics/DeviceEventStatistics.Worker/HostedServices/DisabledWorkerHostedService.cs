@@ -1,6 +1,8 @@
 using Microsoft.Extensions.Options;
 using DeviceEventStatistics.Worker.Configuration;
 
+using DeviceEventStatistics.Domain.Common;
+
 namespace DeviceEventStatistics.Worker.HostedServices;
 
 public sealed class DisabledWorkerHostedService(
@@ -12,7 +14,8 @@ public sealed class DisabledWorkerHostedService(
     {
         if (!workerOptions.Value.Enabled)
         {
-            logger.LogInformation("Statistics worker is disabled; stopping the host without opening a processing loop.");
+            logger.LogInformation(
+                StatisticsContractConstants.Messages.MSG_LOG_HOST_STOPPING_DISABLED);
             applicationLifetime.StopApplication();
         }
 

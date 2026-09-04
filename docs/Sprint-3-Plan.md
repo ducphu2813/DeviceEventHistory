@@ -166,7 +166,7 @@ src/
     Mapping/{AppHubControlMetricMapper,AppHubSensorMetricMapper,AppHubScannerMetricMapper}.cs
     Mapping/ProjectionEventOutcome.cs
     Metadata/{IDeviceMetadataResolver,DeviceMetadata}.cs
-    Time/VietnamStatisticsDateResolver.cs
+    Time/LocalStatisticsDateResolver.cs
     Projection/{StatisticsProjectionPipeline,IncrementalProjectionHandler}.cs
     Projection/{ProjectionBatch,ProjectionCheckpoint,ProjectionSweep,ProjectionDefinition}.cs
     Projection/{IProjectionLeaseStore,IProjectionCheckpointStore}.cs
@@ -228,7 +228,7 @@ tests/
     ProjectionSweepTests.cs
     MetricOwnershipTests.cs
     MetricMappingTests.cs
-    VietnamStatisticsDateResolverTests.cs
+    LocalStatisticsDateResolverTests.cs
     StateDurationCalculatorTests.cs
     ForwardStatePropagationTests.cs
     ProjectionCoverageTests.cs
@@ -675,7 +675,7 @@ Mỗi phase dưới đây có mục tiêu, đầu vào, file chịu trách nhi�
 
 **Phụ thuộc:** P1; contract fixtures P0.3/P0.5. Integration với SQL cần P2.
 
-**File chính:** `MongoDb/Reading/*`, `HistoryDocumentMapper.cs`, `History/*`, `ProjectionSweep.cs`, `Mapping/*`, `VietnamStatisticsDateResolver.cs`, metadata resolver và Mongo index deployment script.
+**File chính:** `MongoDb/Reading/*`, `HistoryDocumentMapper.cs`, `History/*`, `ProjectionSweep.cs`, `Mapping/*`, `LocalStatisticsDateResolver.cs`, metadata resolver và Mongo index deployment script.
 
 #### Task P3.1 - Minimal history input và BSON mapper
 
@@ -712,7 +712,7 @@ Mỗi phase dưới đây có mục tiêu, đầu vào, file chịu trách nhi�
 
 #### Task P3.5 - Ngày thống kê và metadata
 
-- VietnamStatisticsDateResolver dùng fixed UTC+7 để trả StatisticsDate/bucket start/end từ timeline UTC.
+- LocalStatisticsDateResolver dùng fixed UTC+7 để trả StatisticsDate/bucket start/end từ timeline UTC.
 - Metadata resolver ưu tiên cấu hình; event display fields chỉ bổ sung giá trị chưa có.
 - Device/company không hợp lệ đi failure/quality theo contract; không suy từ FileId hoặc source filename.
 - Placeholder dimension không tự gán active/operating schedule; creation do SQL writer thực hiện cùng fact transaction.

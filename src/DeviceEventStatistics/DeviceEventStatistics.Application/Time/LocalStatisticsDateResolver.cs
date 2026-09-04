@@ -1,15 +1,17 @@
+using DeviceEventStatistics.Domain.Common;
+
 namespace DeviceEventStatistics.Application.Time;
 
-public sealed class VietnamStatisticsDateResolver
+public sealed class LocalStatisticsDateResolver
 {
-    private static readonly TimeSpan VietnamOffset = TimeSpan.FromHours(7);
+    private static readonly TimeSpan LocalOffset = TimeSpan.FromHours(7);
 
-    public VietnamStatisticsDateResolver(string timeZoneId = "Asia/Ho_Chi_Minh")
+    public LocalStatisticsDateResolver(string timeZoneId = "Asia/Ho_Chi_Minh")
     {
         if (!string.Equals(timeZoneId, "Asia/Ho_Chi_Minh", StringComparison.Ordinal))
         {
             throw new ArgumentException(
-                "Statistics timezone must be Asia/Ho_Chi_Minh for the Sprint 3 contract.",
+                StatisticsContractConstants.Messages.MSG_TIMEZONE_INVALID,
                 nameof(timeZoneId));
         }
 
@@ -20,14 +22,14 @@ public sealed class VietnamStatisticsDateResolver
 
     public StatisticsBucket Resolve(DateTimeOffset timelineAtUtc)
     {
-        var localDate = DateOnly.FromDateTime(timelineAtUtc.ToOffset(VietnamOffset).DateTime);
+        var localDate = DateOnly.FromDateTime(timelineAtUtc.ToOffset(LocalOffset).DateTime);
         var localStart = localDate.ToDateTime(TimeOnly.MinValue, DateTimeKind.Unspecified);
         var nextLocalStart = localDate.AddDays(1).ToDateTime(TimeOnly.MinValue, DateTimeKind.Unspecified);
 
         return new StatisticsBucket(
             localDate,
-            new DateTimeOffset(localStart, VietnamOffset).ToUniversalTime(),
-            new DateTimeOffset(nextLocalStart, VietnamOffset).ToUniversalTime(),
+            new DateTimeOffset(localStart, LocalOffset).ToUniversalTime(),
+            new DateTimeOffset(nextLocalStart, LocalOffset).ToUniversalTime(),
             TimeZoneId);
     }
 }

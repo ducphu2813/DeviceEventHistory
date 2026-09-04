@@ -1,5 +1,6 @@
 using System.Data;
 using DeviceEventStatistics.Application.Persistence;
+using DeviceEventStatistics.Domain.Common;
 
 namespace DeviceEventStatistics.Infrastructure.SqlServer.Mapping;
 
@@ -174,7 +175,8 @@ internal static class ProjectionTvpValueExtensions
         if (value.Length != 64 || value.Any(character =>
                 !(character is >= '0' and <= '9' or >= 'a' and <= 'f')))
         {
-            throw new FormatException("STAT-EVENT-ID-INVALID: Event identity must be 64 lowercase hexadecimal characters.");
+            throw new FormatException(
+                StatisticsContractConstants.Messages.MSG_EVENT_ID_INVALID);
         }
 
         return Convert.FromHexString(value);

@@ -1,6 +1,7 @@
 using System.Data;
 using DeviceEventStatistics.Application.Persistence;
 using DeviceEventStatistics.Application.Projection;
+using DeviceEventStatistics.Domain.Common;
 using DeviceEventStatistics.Infrastructure.Configuration;
 using DeviceEventStatistics.Infrastructure.SqlServer.Mapping;
 using Microsoft.Data.SqlClient;
@@ -271,7 +272,11 @@ public sealed class SqlProjectionBatchOperations(
         ProjectionLeaseToken lease,
         CancellationToken cancellationToken)
     {
-        if (identity != lease.Identity) throw new ArgumentException("STAT-LEASE-IDENTITY-MISMATCH: Lease identity does not match operation identity.");
+        if (identity != lease.Identity)
+        {
+            throw new ArgumentException(
+                StatisticsContractConstants.Messages.MSG_SQL_LEASE_IDENTITY_MISMATCH);
+        }
 
         await ExecuteAsync(
             session,
@@ -283,7 +288,7 @@ public sealed class SqlProjectionBatchOperations(
                 @LockMode = 'Exclusive',
                 @LockOwner = 'Transaction',
                 @LockTimeout = 0;
-            IF @result < 0 THROW 51000, 'STAT-LEASE-APPLOCK-UNAVAILABLE', 1;
+            IF @result < 0 THROW 51000, '{StatisticsContractConstants.Messages.MSG_SQL_LEASE_APPLOCK_UNAVAILABLE}', 1;
 
             IF NOT EXISTS
             (
@@ -296,7 +301,7 @@ public sealed class SqlProjectionBatchOperations(
                   AND [LeaseEpoch] = @epoch
                   AND [LeaseExpiresAtUtc] > SYSUTCDATETIME()
             )
-                THROW 51001, 'STAT-LEASE-LOST', 1;
+                THROW 51001, '{StatisticsContractConstants.LeaseErrors.Lost}', 1;
             """,
             command =>
             {

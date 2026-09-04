@@ -55,7 +55,7 @@ public sealed class StatisticsProjectionPolicyTests
     [Fact]
     public void Vietnam_bucket_uses_fixed_utc_plus_seven_boundary()
     {
-        var resolver = new DeviceEventStatistics.Application.Time.VietnamStatisticsDateResolver();
+        var resolver = new DeviceEventStatistics.Application.Time.LocalStatisticsDateResolver();
 
         var beforeMidnight = resolver.Resolve(new DateTimeOffset(2026, 8, 28, 16, 59, 59, TimeSpan.Zero));
         var afterMidnight = resolver.Resolve(new DateTimeOffset(2026, 8, 28, 17, 0, 0, TimeSpan.Zero));
@@ -88,7 +88,7 @@ public sealed class StatisticsProjectionPolicyTests
             new AppHubScannerMetricMapper()
         ]);
         var timeline = new DateTimeOffset(2026, 8, 28, 8, 30, 0, TimeSpan.Zero);
-        var bucket = new VietnamStatisticsDateResolver().Resolve(timeline);
+        var bucket = new LocalStatisticsDateResolver().Resolve(timeline);
 
         var tagEvent = CreateEvent() with
         {
@@ -120,7 +120,7 @@ public sealed class StatisticsProjectionPolicyTests
             new HistoryEventEligibilityPolicy(),
             new EventOwnershipPolicy(),
             registry,
-            new VietnamStatisticsDateResolver());
+            new LocalStatisticsDateResolver());
         var historyEvent = CreateEvent() with
         {
             SourceEventName = "raw_record",

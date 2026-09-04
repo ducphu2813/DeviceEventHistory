@@ -1,4 +1,5 @@
 using DeviceEventStatistics.Application.Projection;
+using DeviceEventStatistics.Domain.Common;
 using DeviceEventStatistics.Infrastructure.Configuration;
 using Microsoft.Data.SqlClient;
 
@@ -34,7 +35,8 @@ public sealed class SqlProjectionCheckpointStore(
         }
 
         await transaction.CommitAsync(cancellationToken);
-        return checkpoint ?? throw new InvalidOperationException("STAT-CHECKPOINT-CREATE-FAILED: Checkpoint was not created.");
+        return checkpoint ?? throw new InvalidOperationException(
+            StatisticsContractConstants.Messages.MSG_SQL_CHECKPOINT_CREATE_FAILED);
     }
 
     public async Task<bool> AdvanceAsync(
@@ -75,7 +77,8 @@ public sealed class SqlProjectionCheckpointStore(
     {
         if (expected.Identity != next.Identity || next.Identity != lease.Identity)
         {
-            throw new ArgumentException("STAT-CHECKPOINT-IDENTITY-MISMATCH: Checkpoint and lease identities must match.");
+            throw new ArgumentException(
+                StatisticsContractConstants.Messages.MSG_SQL_CHECKPOINT_IDENTITY_MISMATCH);
         }
 
         await using var command = connection.CreateCommand();

@@ -1,4 +1,5 @@
 using Microsoft.Data.SqlClient;
+using DeviceEventStatistics.Domain.Common;
 
 namespace DeviceEventStatistics.Infrastructure.SqlServer;
 
@@ -61,7 +62,8 @@ public sealed class SqlProjectionSession : IAsyncDisposable
     {
         if (IsCompleted)
         {
-            throw new InvalidOperationException("STAT-SQL-SESSION-COMPLETED: The SQL projection session is already completed.");
+            throw new InvalidOperationException(
+                StatisticsContractConstants.Messages.MSG_SQL_SESSION_COMPLETED);
         }
     }
 }

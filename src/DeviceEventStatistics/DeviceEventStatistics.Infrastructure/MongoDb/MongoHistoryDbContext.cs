@@ -1,4 +1,5 @@
 using DeviceEventStatistics.Infrastructure.Configuration;
+using DeviceEventStatistics.Domain.Common;
 using MongoDB.Bson;
 using MongoDB.Driver;
 
@@ -26,7 +27,9 @@ public sealed class MongoHistoryDbContext(
         if (!collectionNames.Contains(options.HistoryCollection, StringComparer.Ordinal))
         {
             throw new InvalidOperationException(
-                $"STAT-MONGO-COLLECTION-MISSING: History collection '{options.HistoryCollection}' was not found.");
+                StatisticsContractConstants.Messages.Format(
+                    StatisticsContractConstants.Messages.MSG_MONGO_COLLECTION_MISSING,
+                    options.HistoryCollection));
         }
 
         var indexNames = await (await HistoryCollection.Indexes.ListAsync(cancellationToken))
@@ -41,7 +44,9 @@ public sealed class MongoHistoryDbContext(
         if (missingIndexes.Length > 0)
         {
             throw new InvalidOperationException(
-                $"STAT-MONGO-INDEX-MISSING: Required history indexes are missing: {string.Join(", ", missingIndexes)}.");
+                StatisticsContractConstants.Messages.Format(
+                    StatisticsContractConstants.Messages.MSG_MONGO_INDEX_MISSING,
+                    string.Join(", ", missingIndexes)));
         }
     }
 }

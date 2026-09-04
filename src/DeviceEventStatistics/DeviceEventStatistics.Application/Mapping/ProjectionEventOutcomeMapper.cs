@@ -10,7 +10,7 @@ public sealed class ProjectionEventOutcomeMapper(
     HistoryEventEligibilityPolicy eligibilityPolicy,
     EventOwnershipPolicy ownershipPolicy,
     DeviceMetricMapperRegistry metricRegistry,
-    VietnamStatisticsDateResolver dateResolver)
+    LocalStatisticsDateResolver dateResolver)
 {
     public ProjectionEventOutcome Map(HistoryEvent historyEvent)
     {
