@@ -1,0 +1,52 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DeviceEventStatistics.Domain", "src\DeviceEventStatistics\DeviceEventStatistics.Domain\DeviceEventStatistics.Domain.csproj", "{9CBE3006-E884-4689-ABD3-5A51535B8CC4}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DeviceEventStatistics.Application", "src\DeviceEventStatistics\DeviceEventStatistics.Application\DeviceEventStatistics.Application.csproj", "{48DEBA82-BFF5-4D44-8C16-1BA32063F579}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DeviceEventStatistics.Infrastructure", "src\DeviceEventStatistics\DeviceEventStatistics.Infrastructure\DeviceEventStatistics.Infrastructure.csproj", "{D60E5F88-A687-4EE0-9DBD-C0DD6F44D909}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DeviceEventStatistics.Worker", "src\DeviceEventStatistics\DeviceEventStatistics.Worker\DeviceEventStatistics.Worker.csproj", "{60572998-0CFD-4438-B567-58F6363397ED}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DeviceEventStatistics.UnitTests", "tests\DeviceEventStatistics\DeviceEventStatistics.UnitTests\DeviceEventStatistics.UnitTests.csproj", "{944E8688-7766-4A8F-A620-87768BE07516}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DeviceEventStatistics.IntegrationTests", "tests\DeviceEventStatistics\DeviceEventStatistics.IntegrationTests\DeviceEventStatistics.IntegrationTests.csproj", "{7E5D6BEE-C4B3-4716-A837-5284A1D2FEAE}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DeviceEventStatistics.ArchitectureTests", "tests\DeviceEventStatistics\DeviceEventStatistics.ArchitectureTests\DeviceEventStatistics.ArchitectureTests.csproj", "{C5132A72-FAC2-4C11-BB8E-2BF5FA1F23F7}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{9CBE3006-E884-4689-ABD3-5A51535B8CC4}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{9CBE3006-E884-4689-ABD3-5A51535B8CC4}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{9CBE3006-E884-4689-ABD3-5A51535B8CC4}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{9CBE3006-E884-4689-ABD3-5A51535B8CC4}.Release|Any CPU.Build.0 = Release|Any CPU
+		{48DEBA82-BFF5-4D44-8C16-1BA32063F579}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{48DEBA82-BFF5-4D44-8C16-1BA32063F579}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{48DEBA82-BFF5-4D44-8C16-1BA32063F579}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{48DEBA82-BFF5-4D44-8C16-1BA32063F579}.Release|Any CPU.Build.0 = Release|Any CPU
+		{D60E5F88-A687-4EE0-9DBD-C0DD6F44D909}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{D60E5F88-A687-4EE0-9DBD-C0DD6F44D909}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{D60E5F88-A687-4EE0-9DBD-C0DD6F44D909}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{D60E5F88-A687-4EE0-9DBD-C0DD6F44D909}.Release|Any CPU.Build.0 = Release|Any CPU
+		{60572998-0CFD-4438-B567-58F6363397ED}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{60572998-0CFD-4438-B567-58F6363397ED}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{60572998-0CFD-4438-B567-58F6363397ED}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{60572998-0CFD-4438-B567-58F6363397ED}.Release|Any CPU.Build.0 = Release|Any CPU
+		{944E8688-7766-4A8F-A620-87768BE07516}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{944E8688-7766-4A8F-A620-87768BE07516}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{944E8688-7766-4A8F-A620-87768BE07516}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{944E8688-7766-4A8F-A620-87768BE07516}.Release|Any CPU.Build.0 = Release|Any CPU
+		{7E5D6BEE-C4B3-4716-A837-5284A1D2FEAE}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{7E5D6BEE-C4B3-4716-A837-5284A1D2FEAE}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{7E5D6BEE-C4B3-4716-A837-5284A1D2FEAE}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{7E5D6BEE-C4B3-4716-A837-5284A1D2FEAE}.Release|Any CPU.Build.0 = Release|Any CPU
+		{C5132A72-FAC2-4C11-BB8E-2BF5FA1F23F7}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{C5132A72-FAC2-4C11-BB8E-2BF5FA1F23F7}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{C5132A72-FAC2-4C11-BB8E-2BF5FA1F23F7}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{C5132A72-FAC2-4C11-BB8E-2BF5FA1F23F7}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+EndGlobal
