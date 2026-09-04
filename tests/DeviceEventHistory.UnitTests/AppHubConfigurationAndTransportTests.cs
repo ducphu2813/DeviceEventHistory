@@ -126,6 +126,34 @@ public sealed class AppHubConfigurationAndTransportTests
     }
 
     [Fact]
+    public void Jwt_credential_uses_tokenjwt_and_account_session_type()
+    {
+        var source = CreateAppHubOptions().Sources[0];
+        source.AccessToken = "header.payload.signature";
+        source.TokenJwt = null;
+
+        var query = AppHubSignalRQueryFactory.Create(source);
+
+        Assert.Equal("header.payload.signature", query[AppConst.AppHub.JwtTokenQueryKey]);
+        Assert.Equal(AppConst.AppHub.AccountSessionTypeValue, query[AppConst.AppHub.SessionTypeQueryKey]);
+        Assert.False(query.ContainsKey(AppConst.AppHub.AccessTokenQueryKey));
+    }
+
+    [Fact]
+    public void User_cookie_credential_uses_token_and_account_session_type()
+    {
+        var source = CreateAppHubOptions().Sources[0];
+        source.AccessToken = "encrypted-user-cookie";
+        source.TokenJwt = null;
+
+        var query = AppHubSignalRQueryFactory.Create(source);
+
+        Assert.Equal("encrypted-user-cookie", query[AppConst.AppHub.AccessTokenQueryKey]);
+        Assert.Equal(AppConst.AppHub.AccountSessionTypeValue, query[AppConst.AppHub.SessionTypeQueryKey]);
+        Assert.False(query.ContainsKey(AppConst.AppHub.JwtTokenQueryKey));
+    }
+
+    [Fact]
     public async Task Connection_registers_callbacks_before_start_and_joins_after_connect()
     {
         var client = new FakeSignalRClient();
@@ -139,7 +167,7 @@ public sealed class AppHubConfigurationAndTransportTests
         await connection.StartAsync(CancellationToken.None);
 
         Assert.Equal(
-            ["create-proxy", "register:receiveDeviceOnline", "start", "join"],
+            ["create-proxy", "register:receiveDeviceOnline", "start", "join-monitoring", "join-anten"],
             client.Calls);
         Assert.Equal(AppHubConnectionState.Running, connection.State);
     }
@@ -162,7 +190,8 @@ public sealed class AppHubConfigurationAndTransportTests
 
         await WaitUntilAsync(() => connection.State == AppHubConnectionState.Running);
 
-        Assert.Equal(2, client.Proxy.JoinCount);
+        Assert.Equal(2, client.Proxy.JoinMonitoringCount);
+        Assert.Equal(2, client.Proxy.JoinAntenCount);
         Assert.Equal(1, client.Proxy.RegistrationCount);
     }
 
@@ -262,7 +291,9 @@ public sealed class AppHubConfigurationAndTransportTests
     {
         public int RegistrationCount { get; private set; }
 
-        public int JoinCount { get; private set; }
+        public int JoinMonitoringCount { get; private set; }
+
+        public int JoinAntenCount { get; private set; }
 
         public IDisposable RegisterCallback(string eventName, Action<object[]> callback)
         {
@@ -273,8 +304,15 @@ public sealed class AppHubConfigurationAndTransportTests
 
         public Task JoinMonitoringAsync(CancellationToken cancellationToken)
         {
-            calls.Add("join");
-            JoinCount++;
+            calls.Add("join-monitoring");
+            JoinMonitoringCount++;
+            return Task.CompletedTask;
+        }
+
+        public Task JoinAntenAsync(CancellationToken cancellationToken)
+        {
+            calls.Add("join-anten");
+            JoinAntenCount++;
             return Task.CompletedTask;
         }
     }

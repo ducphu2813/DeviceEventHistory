@@ -48,7 +48,15 @@ public sealed class AppHubMappingTests
         Assert.Equal(42, deviceEvent.Facts.User!.UserId);
         Assert.Equal(1, deviceEvent.Facts.Scanner!.SessionType);
         Assert.Equal(2, deviceEvent.Facts.Scanner.DeviceType);
-        Assert.Null(deviceEvent.OccurredAtUtc);
+        Assert.Equal(
+            sourceEvent.ReceivedAtUtc,
+            deviceEvent.OccurredAtUtc);
+        Assert.Equal(
+            TimeZoneInfo.ConvertTime(
+                sourceEvent.ReceivedAtUtc,
+                TimeZoneInfo.FindSystemTimeZoneById(AppConst.RawLog.DefaultTimeZoneId)),
+            deviceEvent.OccurredAtLocal);
+        Assert.Equal(AppConst.TimeBases.Received, deviceEvent.TimeBasis);
         Assert.Contains(AppConst.Parsing.SourceTimeUntrusted, deviceEvent.Parse.Warnings);
         Assert.DoesNotContain("\"ConnectionId\":", sourceEvent.RawArgumentsJson, StringComparison.Ordinal);
         Assert.DoesNotContain("private-user", sourceEvent.RawArgumentsJson, StringComparison.Ordinal);
@@ -101,11 +109,11 @@ public sealed class AppHubMappingTests
     }
 
     [Fact]
-    public void Opaque_callback_preserves_raw_evidence_without_inventing_facts()
+    public void Device_read_tag_maps_device_tag_and_epc_fields()
     {
         var sourceEvent = CreateSourceEvent(
             AppConst.AppHub.Callbacks.ReceiveDeviceReadTag,
-            "[{\"CompanyId\":2,\"TagId\":\"EPC-01\"}]");
+            "[{\"CompanyId\":2,\"DeviceId\":101,\"TagId\":\"TAG-01\",\"Epc\":\"EPC-01\"}]");
 
         var result = CreateMapper(
             new AppHubSourceMappingOptions("apphub-source", null, false),
@@ -114,12 +122,86 @@ public sealed class AppHubMappingTests
 
         Assert.NotNull(result.Event);
         Assert.Equal(AppConst.Categories.TagRead, result.Event!.Category);
-        Assert.Equal(AppConst.Parsing.StatusUnmapped, result.Event.Parse.Status);
-        Assert.Contains(
-            AppConst.Parsing.AppHubOpaqueContractUnconfirmed,
-            result.Event.Parse.Warnings);
-        Assert.Null(result.Event.Facts.TagRead);
+        Assert.Equal(AppConst.Parsing.StatusParsed, result.Event.Parse.Status);
+        Assert.Equal(101, result.Event.Device!.Id);
+        Assert.Equal("TAG-01", result.Event.Facts.TagRead!.TagId);
+        Assert.Equal("EPC-01", result.Event.Facts.TagRead.EpcRaw);
+        Assert.Null(result.Event.Facts.TagRead.RoutingFileId);
         Assert.Equal(sourceEvent.RawArgumentsJson, result.Event.RawPayload.ArgumentsJson);
+    }
+
+    [Fact]
+    public void Device_connection_maps_device_and_source_connection_state()
+    {
+        var sourceEvent = CreateSourceEvent(
+            AppConst.AppHub.Callbacks.ReceiveStateConnected,
+            "[{\"DeviceId\":18,\"IsStart\":false,\"IsConnecting\":true,\"IsConnected\":false}]");
+
+        var result = CreateMapper(
+            new AppHubSourceMappingOptions("apphub-source", 2, true),
+            AppConst.AppHub.Callbacks.ReceiveStateConnected)
+            .Map(sourceEvent);
+
+        Assert.NotNull(result.Event);
+        Assert.Equal(AppConst.Parsing.StatusParsed, result.Event!.Parse.Status);
+        Assert.Equal(18, result.Event.Device!.Id);
+        Assert.Equal(
+            AppConst.CanonicalValues.ConnectionStatusConnecting,
+            result.Event.Facts.Connection!.Status);
+        Assert.Equal(
+            new DateTimeOffset(2026, 8, 28, 8, 30, 0, TimeSpan.Zero),
+            result.Event.OccurredAtUtc);
+        Assert.Equal(
+            new DateTimeOffset(2026, 8, 28, 15, 30, 0, TimeSpan.FromHours(7)),
+            result.Event.OccurredAtLocal);
+        Assert.Equal(AppConst.TimeBases.Received, result.Event.TimeBasis);
+        Assert.False(result.Event.Facts.Connection.IsStart);
+        Assert.True(result.Event.Facts.Connection.IsConnecting);
+        Assert.False(result.Event.Facts.Connection.IsConnected);
+        Assert.False(result.Event.Facts.Connection.IsSourceConnected);
+    }
+
+    [Theory]
+    [InlineData(AppConst.AppHub.Callbacks.ReceiveGreenState, "green_light")]
+    [InlineData(AppConst.AppHub.Callbacks.ReceiveRedState, "red_light")]
+    public void Device_control_state_maps_device_control_facts(
+        string eventName,
+        string expectedControl)
+    {
+        var sourceEvent = CreateSourceEvent(
+            eventName,
+            "[{\"DeviceId\":40,\"On\":false}]");
+
+        var result = CreateMapper(
+            new AppHubSourceMappingOptions("apphub-source", 2, true),
+            eventName)
+            .Map(sourceEvent);
+
+        Assert.NotNull(result.Event);
+        Assert.Equal(AppConst.Parsing.StatusParsed, result.Event!.Parse.Status);
+        Assert.Equal(40, result.Event.Device!.Id);
+        Assert.Equal(expectedControl, result.Event.Facts.DeviceControlState!.Control);
+        Assert.Equal("off", result.Event.Facts.DeviceControlState.State);
+        Assert.Equal("false", result.Event.Facts.DeviceControlState.RawState);
+    }
+
+    [Fact]
+    public void Device_sensor_state_maps_timeout_and_device()
+    {
+        var sourceEvent = CreateSourceEvent(
+            AppConst.AppHub.Callbacks.ReceiveTimeSensor,
+            "[{\"DeviceId\":18,\"Timeout\":3}]");
+
+        var result = CreateMapper(
+            new AppHubSourceMappingOptions("apphub-source", 2, true),
+            AppConst.AppHub.Callbacks.ReceiveTimeSensor)
+            .Map(sourceEvent);
+
+        Assert.NotNull(result.Event);
+        Assert.Equal(AppConst.Parsing.StatusParsed, result.Event!.Parse.Status);
+        Assert.Equal(18, result.Event.Device!.Id);
+        Assert.Equal(3, result.Event.Facts.SensorState!.Timeout);
+        Assert.Equal("seconds", result.Event.Facts.SensorState.TimeoutUnit);
     }
 
     [Fact]
@@ -171,6 +253,13 @@ public sealed class AppHubMappingTests
                 new ScannerEventMapper(CreateTenantResolver(options), eventName),
             AppConst.AppHub.Callbacks.ReceiveDeviceReadTag =>
                 new DeviceReadTagEventMapper(CreateTenantResolver(options)),
+            AppConst.AppHub.Callbacks.ReceiveStateConnected =>
+                new DeviceConnectionEventMapper(CreateTenantResolver(options)),
+            AppConst.AppHub.Callbacks.ReceiveGreenState
+                or AppConst.AppHub.Callbacks.ReceiveRedState =>
+                new DeviceControlStateEventMapper(CreateTenantResolver(options), eventName),
+            AppConst.AppHub.Callbacks.ReceiveTimeSensor =>
+                new DeviceSensorStateEventMapper(CreateTenantResolver(options)),
             AppConst.AppHub.Callbacks.ReceiveDeviceOnline =>
                 new DeviceOnlineEventMapper(CreateTenantResolver(options)),
             _ => throw new ArgumentOutOfRangeException(nameof(eventName))

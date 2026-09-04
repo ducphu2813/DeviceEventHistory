@@ -69,4 +69,42 @@ public abstract class AppHubCanonicalMapperBase(
         AppHubJsonValueReader.TryGetProperty(payload, propertyName, out var value)
             ? AppHubJsonValueReader.ReadString(value)
             : null;
+
+    protected static bool? ReadBoolean(JsonElement payload, string propertyName) =>
+        AppHubJsonValueReader.TryGetProperty(payload, propertyName, out var value)
+            ? AppHubJsonValueReader.ReadBoolean(value)
+            : null;
+
+    protected static double? ReadDouble(JsonElement payload, string propertyName) =>
+        AppHubJsonValueReader.TryGetProperty(payload, propertyName, out var value)
+            ? AppHubJsonValueReader.ReadDouble(value)
+            : null;
+
+    protected static void AddMissingWarning(
+        ICollection<string> warnings,
+        params object?[] values)
+    {
+        if (values.Any(value => value is null))
+        {
+            warnings.Add(AppConst.Parsing.OptionalFieldMissing);
+        }
+    }
+
+    protected static CanonicalDeviceEvent.DeviceContext? CreateDevice(int? deviceId)
+    {
+        return deviceId is > 0
+            ? new CanonicalDeviceEvent.DeviceContext { Id = deviceId }
+            : null;
+    }
+
+    protected static string ResolveConnectionStatus(
+        bool? isConnecting,
+        bool? isConnected) =>
+        isConnecting == true
+            ? AppConst.CanonicalValues.ConnectionStatusConnecting
+            : isConnected == true
+                ? AppConst.CanonicalValues.ConnectionStatusConnected
+                : isConnected == false
+                    ? AppConst.CanonicalValues.ConnectionStatusDisconnected
+                    : AppConst.CanonicalValues.ConnectionStatusUnknown;
 }

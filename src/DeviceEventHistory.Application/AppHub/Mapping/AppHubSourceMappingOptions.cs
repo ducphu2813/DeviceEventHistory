@@ -5,7 +5,8 @@ namespace DeviceEventHistory.Application.AppHub.Mapping;
 public sealed record AppHubSourceMappingOptions(
     string SourceId,
     int? CompanyId,
-    bool DedicatedSingleTenant);
+    bool DedicatedSingleTenant,
+    string TimeZoneId = AppConst.RawLog.DefaultTimeZoneId);
 
 public interface IAppHubSourceConfigurationProvider
 {

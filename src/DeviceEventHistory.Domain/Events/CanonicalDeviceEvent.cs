@@ -146,9 +146,13 @@ public sealed record CanonicalDeviceEvent
 
     public sealed record TagReadFacts
     {
-        public required string TagId { get; init; }
+        public string? TagId { get; init; }
 
-        public required long RoutingFileId { get; init; }
+        public string? EpcRaw { get; init; }
+
+        public long? RoutingFileId { get; init; }
+
+        public string? ReadTimeText { get; init; }
     }
 
     public sealed record GateStateFacts
@@ -214,6 +218,12 @@ public sealed record CanonicalDeviceEvent
 
         public string? Reason { get; init; }
 
+        public bool? IsStart { get; init; }
+
+        public bool? IsConnecting { get; init; }
+
+        public bool? IsConnected { get; init; }
+
         public bool? IsSourceConnected { get; init; }
 
         public DateTimeOffset? ConnectedAtLocal { get; init; }
@@ -228,6 +238,20 @@ public sealed record CanonicalDeviceEvent
         public bool? IsSnapshot { get; init; }
 
         public string? SourceState { get; init; }
+
+        public bool? IsStart { get; init; }
+
+        public bool? IsUsed { get; init; }
+
+        public bool? IsConnecting { get; init; }
+
+        public bool? IsConnected { get; init; }
+
+        public bool? IsGreenLighting { get; init; }
+
+        public bool? IsRedLighting { get; init; }
+
+        public string? GateState { get; init; }
     }
 
     public sealed record DeviceControlStateFacts

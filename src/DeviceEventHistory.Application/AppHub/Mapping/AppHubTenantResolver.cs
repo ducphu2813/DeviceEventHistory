@@ -7,6 +7,30 @@ namespace DeviceEventHistory.Application.AppHub.Mapping;
 public sealed class AppHubTenantResolver(
     IAppHubSourceConfigurationProvider sourceConfigurationProvider)
 {
+    public TimeZoneInfo ResolveTimeZone(string sourceId)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(sourceId);
+
+        var timeZoneId = sourceConfigurationProvider.TryGet(
+                sourceId,
+                out var sourceOptions)
+            ? sourceOptions.TimeZoneId
+            : AppConst.RawLog.DefaultTimeZoneId;
+
+        try
+        {
+            return TimeZoneInfo.FindSystemTimeZoneById(timeZoneId.Trim());
+        }
+        catch (TimeZoneNotFoundException)
+        {
+            return TimeZoneInfo.Utc;
+        }
+        catch (InvalidTimeZoneException)
+        {
+            return TimeZoneInfo.Utc;
+        }
+    }
+
     public AppHubTenantResolution Resolve(
         string sourceId,
         JsonElement? payload)

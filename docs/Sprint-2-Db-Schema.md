@@ -103,8 +103,8 @@ receiveRequestDeviceScanInfoOnline
   "sourceKind": "erp_apphub",
   "companyId": 2,
 
-  "occurredAtUtc": null,
-  "occurredAtLocal": null,
+  "occurredAtUtc": "2026-08-28T08:30:00.123Z",
+  "occurredAtLocal": "2026-08-28T15:30:00.123+07:00",
   "receivedAtUtc": "2026-08-28T08:30:00.123Z",
   "persistedAtUtc": "2026-08-28T08:30:00.150Z",
   "timelineAtUtc": "2026-08-28T08:30:00.123Z",
@@ -197,7 +197,7 @@ V2 luôn có `facts` object nhưng chỉ ghi branch có dữ liệu; event chưa
 
 | Field | Meaning |
 |---|---|
-| `occurredAtUtc` | Producer/source event time nếu đáng tin cậy |
+| `occurredAtUtc` | Producer/source event time nếu đáng tin cậy; với AppHub không có source timestamp thì là thời điểm Worker nhận callback |
 | `receivedAtUtc` | Worker receive time |
 | `persistedAtUtc` | Mongo persistence time |
 | `timelineAtUtc` | Effective indexed timeline time |
@@ -207,14 +207,12 @@ timelineAtUtc = occurredAtUtc ?? receivedAtUtc
 timeBasis     = occurred | received
 ```
 
-Không ghi received time giả làm occurred time. `occurredAtLocal` giữ ISO-8601 có offset; UTC fields dùng BSON Date.
+Raw-log không ghi received time giả làm occurred time. Với AppHub Monitoring, ERP không gửi source timestamp nên Worker dùng `ReceivedAtUtc` làm observed event time để bảo đảm document có đủ hai field `occurredAt*`; `timeBasis` vẫn là `received` để phân biệt rõ đây không phải timestamp do ERP phát sinh. `occurredAtLocal` được chuyển theo `TimeZoneId` của AppHub source; UTC fields dùng BSON Date.
 
 Timestamp/timezone không chắc chắn:
 
-- `occurredAtUtc = null`;
-- timeline dùng received time;
-- giữ raw timestamp;
-- thêm parse warning.
+- Raw-log: `occurredAtUtc = null`, timeline dùng received time, giữ raw timestamp và thêm parse warning.
+- AppHub: `occurredAtUtc = receivedAtUtc`, `occurredAtLocal` là cùng mốc được chuyển timezone, `timeBasis = received`.
 
 ## 6. Source, device và raw payload
 

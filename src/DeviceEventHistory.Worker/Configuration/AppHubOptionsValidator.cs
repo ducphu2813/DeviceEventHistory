@@ -88,6 +88,8 @@ public sealed class AppHubOptionsValidator(
                 prefix));
         }
 
+        ValidateTimeZone(source.TimeZoneId, prefix, failures);
+
         if (source.ChannelCapacity <= 0)
         {
             failures.Add(AppConst.Messages.Format(
@@ -125,6 +127,39 @@ public sealed class AppHubOptionsValidator(
 
         ValidateCallbacks(source.EnabledEvents, prefix, failures);
         ValidateCredentialConfiguration(source, prefix, failures);
+    }
+
+    private static void ValidateTimeZone(
+        string timeZoneId,
+        string prefix,
+        ICollection<string> failures)
+    {
+        if (string.IsNullOrWhiteSpace(timeZoneId))
+        {
+            failures.Add(ValidationMessageFormatter.Format(
+                AppConst.Messages.MSG_TIME_ZONE_REQUIRED,
+                prefix));
+            return;
+        }
+
+        try
+        {
+            _ = TimeZoneInfo.FindSystemTimeZoneById(timeZoneId.Trim());
+        }
+        catch (TimeZoneNotFoundException)
+        {
+            failures.Add(ValidationMessageFormatter.Format(
+                AppConst.Messages.MSG_TIME_ZONE_NOT_FOUND,
+                prefix,
+                timeZoneId));
+        }
+        catch (InvalidTimeZoneException)
+        {
+            failures.Add(ValidationMessageFormatter.Format(
+                AppConst.Messages.MSG_TIME_ZONE_INVALID,
+                prefix,
+                timeZoneId));
+        }
     }
 
     private static void ValidateEndpoint(

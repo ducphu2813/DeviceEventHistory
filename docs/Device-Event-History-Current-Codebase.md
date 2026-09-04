@@ -119,7 +119,7 @@ Chứa các concept ổn định, không biết MongoDB, filesystem, HTTP, Signa
 - `Failures/CanonicalIngestionFailure.cs`: failure model dùng chung cho mọi source.
 - `Common/AppConst.cs`: section name, default kỹ thuật, block name, collection name, message và observability contract không chứa secret.
 
-`CanonicalDeviceEvent` hiện biểu diễn Schema V2: giữ `EventId`, schema/parser version, category, `SourceKind`, company, occurred/received/persisted/timeline time, source identity, device, raw payload, sparse facts, parse result và ingestion metadata. Source context có thể mang file offsets hoặc AppHub connection generation/receive sequence tùy adapter; không điền fake field của source khác. Raw payload đã qua privacy boundary luôn được giữ để trace/reprocess.
+`CanonicalDeviceEvent` hiện biểu diễn Schema V2: giữ `EventId`, schema/parser version, category, `SourceKind`, company, occurred/received/persisted/timeline time, source identity, device, raw payload, sparse facts, parse result và ingestion metadata. Source context có thể mang file offsets hoặc AppHub connection generation/receive sequence tùy adapter; không điền fake field của source khác. Với AppHub không có source timestamp, `occurredAt*` dùng observed receive time và giữ `timeBasis=received`; raw payload đã qua privacy boundary luôn được giữ để trace/reprocess.
 
 ### 3.2. Application
 
@@ -206,7 +206,7 @@ Program.cs
 Sau initialization, hai hosted service có thể chạy độc lập theo configuration:
 
 - `RawLogIngestionHostedService` khởi chạy file orchestration. `GracefulShutdownCoordinator` tạo scheduling loop trước polling loop để bounded queue có consumer trước khi polling bắt đầu enqueue.
-- `ErpAppHubMonitoringHostedService` tạo một `AppHubSourceRuntime` cho mỗi source, sau đó runtime khởi động FIFO processor trước connection loop, đăng ký callback trước `Start()`, join `Monitoring` và quản lý reconnect/rejoin.
+- `ErpAppHubMonitoringHostedService` tạo một `AppHubSourceRuntime` cho mỗi source, sau đó runtime khởi động FIFO processor trước connection loop, đăng ký callback trước `Start()`, join `Monitoring` và `Anten` theo contract ERP, đồng thời quản lý reconnect/rejoin.
 
 Options đều được bind từ configuration và validate bằng `ValidateOnStart()`:
 
@@ -363,7 +363,7 @@ Mỗi `AppHubSourceRuntime` sở hữu connection, connection generation, monoto
 
 Admission dùng `TryWrite` fast path, sau đó chờ tối đa `EnqueueTimeout`. Khi channel vẫn full, callback được ghi nhận là dropped, tăng saturation metric và làm health degradation; không đổi sang unbounded channel và không giả vờ event đã persistence.
 
-Connection lifecycle đăng ký callback trước `Start()`, join `Monitoring` sau khi connect, rebuild connection với generation mới khi lỗi và reconnect bằng capped exponential backoff có jitter. Runtime join lại group sau reconnect và dispose subscription/connection cũ để tránh duplicate callback registration.
+Connection lifecycle đăng ký callback trước `Start()`, join `Monitoring` và `Anten` sau khi connect, rebuild connection với generation mới khi lỗi và reconnect bằng capped exponential backoff có jitter. Runtime join lại cả hai group sau reconnect và dispose subscription/connection cũ để tránh duplicate callback registration. Classic SignalR auth gửi `sessionType=0`; JWT được gửi qua `tokenjwt` (kể cả giá trị JWT cũ đặt trong `AccessToken` để tương thích cấu hình Development), còn UserCookie dùng `token`.
 
 AppHub không có checkpoint và không replay mặc định. Identity của một admitted envelope ổn định trong Mongo retry, nhưng không deduplicate qua reconnect/restart hoặc với raw-log khi chưa có producer `sourceEventId` dùng chung.
 
@@ -404,7 +404,7 @@ Category hiện được suy ra ở mapper:
 - không có `te` nhưng có `t`: `tag_read`;
 - còn lại: `unknown`.
 
-`CompanyId` lấy từ source configuration. `OccurredAtUtc`/`OccurredAtLocal` được chuyển theo `TimeZoneId` của source. Mọi numeric/date parsing dùng invariant culture.
+`CompanyId` lấy từ source configuration. Raw-log dùng source timestamp; AppHub dùng observed receive time khi ERP không gửi timestamp. `OccurredAtLocal` của AppHub được chuyển theo `TimeZoneId` của source. Mọi numeric/date parsing dùng invariant culture.
 
 ### 7.2. AppHub mapper registry
 
@@ -416,11 +416,11 @@ AppHub callback được dispatch bằng exact key `sourceKind + eventName`. Cá
 | `DeviceConnectionEventMapper` | `receiveStateConnected` / `device_connection` |
 | `DeviceControlStateEventMapper` | green/red / `device_control_state` |
 | `DeviceSensorStateEventMapper` | `receiveTimeSensor` / `device_sensor_state` |
-| `DeviceReadTagEventMapper` | `receiveDeviceReadTag` / `tag_read` |
+| `DeviceReadTagEventMapper` | `receiveDeviceReadTag` / `tag_read`; maps `DeviceId`, `TagId`, `Epc` |
 | `ScannerEventMapper` | scanner connect/disconnect/info / activity hoặc snapshot |
 | `ClientDeviceConnectionEventMapper` | client-device connect/disconnect |
 
-Mapper chỉ tạo facts đã có evidence. Known optional variant tạo warning; traceable callback chưa khóa contract đi fallback `unknown/unmapped` và giữ raw arguments; malformed JSON, required identity hoặc tenant không hợp lệ tạo `ingestion_failures`.
+Các callback Monitoring đã được xác nhận bằng contract ERP/FE đều đi typed mapper: `device_online`, `device_connection`, `device_control_state`, `device_sensor_state`, `tag_read`, scanner và client-device lifecycle. Mapper giữ nguyên raw arguments, map các field identity/state đã có evidence và dùng `parsed_with_warnings` cho field thiếu. Callback ngoài registry hoặc payload không hợp lệ vẫn đi fallback/failure tương ứng; không suy đoán source time khi payload không cung cấp.
 
 Tenant resolution ưu tiên positive `CompanyId` trong payload. Configured `CompanyId` chỉ được fallback khi source khai báo `DedicatedSingleTenant=true`; payload/config mismatch hoặc không resolve được tenant tạo failure. Scanner `ConnectionId` được hash trước persistence và các field nhạy cảm theo privacy policy bị drop tại admission boundary.
 
@@ -527,7 +527,7 @@ Các log quan trọng khi debug:
 
 Health check classes đã đăng ký cho Mongo, raw-log source, ingestion progress và AppHub. AppHub có health state riêng theo source, phân biệt connecting/running/degraded/unhealthy; không có callback mới nhưng connection vẫn healthy không tự động bị coi là lỗi. Worker hiện chưa expose HTTP health endpoint; muốn đưa health ra ngoài cần bổ sung host/endpoint riêng.
 
-AppHub reconnect dùng connection generation mới cho mỗi lần rebuild, backoff exponential có jitter và join lại `Monitoring` sau khi SignalR báo reconnected. Callback chỉ được register một lần cho mỗi connection; transition join được serialize để không phát sinh duplicate join khi transport phát nhiều lifecycle event liên tiếp. Khi shutdown, runtime dừng receive/reconnect, complete bounded channel, drain consumer trong `ShutdownTimeout` và cancel processor nếu drain timeout; event còn trong memory không được coi là durable.
+AppHub reconnect dùng connection generation mới cho mỗi lần rebuild, backoff exponential có jitter và join lại `Monitoring` cùng `Anten` sau khi SignalR báo reconnected. Callback chỉ được register một lần cho mỗi connection; transition join được serialize để không phát sinh duplicate join khi transport phát nhiều lifecycle event liên tiếp. Khi shutdown, runtime dừng receive/reconnect, complete bounded channel, drain consumer trong `ShutdownTimeout` và cancel processor nếu drain timeout; event còn trong memory không được coi là durable.
 
 ## 11. Testing hiện tại
 

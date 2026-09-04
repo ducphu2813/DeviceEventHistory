@@ -200,6 +200,7 @@ Rules:
           "HubName": "AppHub",
           "CompanyId": null,
           "DedicatedSingleTenant": false,
+          "TimeZoneId": "SE Asia Standard Time",
           "ChannelCapacity": 5000,
           "EnqueueTimeout": "00:00:00.100",
           "ReconnectMinDelay": "00:00:01",

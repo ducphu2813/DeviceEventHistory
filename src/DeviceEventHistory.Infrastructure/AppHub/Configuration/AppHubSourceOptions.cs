@@ -14,6 +14,8 @@ public sealed class AppHubSourceOptions
 
     public bool DedicatedSingleTenant { get; set; }
 
+    public string TimeZoneId { get; set; } = AppConst.RawLog.DefaultTimeZoneId;
+
     public int ChannelCapacity { get; set; } = AppConst.Defaults.AppHubChannelCapacity;
 
     public TimeSpan EnqueueTimeout { get; set; } =

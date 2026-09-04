@@ -154,6 +154,7 @@ public sealed class AppHubMonitoringConnection : IAppHubMonitoringConnection
 
             SetState(AppHubConnectionState.Connected);
             await JoinMonitoringCoreAsync(CancellationToken.None);
+            await JoinAntenCoreAsync(CancellationToken.None);
         }
         catch (Exception exception)
         {
@@ -184,6 +185,33 @@ public sealed class AppHubMonitoringConnection : IAppHubMonitoringConnection
         try
         {
             await proxy.JoinMonitoringAsync(cancellationToken);
+            await JoinAntenCoreAsync(cancellationToken);
+        }
+        catch
+        {
+            SetState(AppHubConnectionState.Connected);
+            throw;
+        }
+    }
+
+    private async Task JoinAntenCoreAsync(CancellationToken cancellationToken)
+    {
+        ObjectDisposedException.ThrowIf(disposed, this);
+        if (State == AppHubConnectionState.Running)
+        {
+            return;
+        }
+
+        if (State != AppHubConnectionState.JoiningMonitoring &&
+            State != AppHubConnectionState.Connected)
+        {
+            throw new InvalidOperationException(
+                AppConst.Messages.MSG_APPHUB_PROXY_REQUIRED);
+        }
+
+        try
+        {
+            await proxy.JoinAntenAsync(cancellationToken);
             SetState(AppHubConnectionState.Running);
         }
         catch
@@ -222,4 +250,6 @@ public interface IAppHubSignalRProxy
     IDisposable RegisterCallback(string eventName, Action<object[]> callback);
 
     Task JoinMonitoringAsync(CancellationToken cancellationToken);
+
+    Task JoinAntenAsync(CancellationToken cancellationToken);
 }
