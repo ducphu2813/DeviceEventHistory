@@ -8,6 +8,7 @@ internal static class ConfigurationValidationErrors
     public const string WorkerIdRequired = "STAT-CONFIG-WORKER-ID-REQUIRED";
     public const string ShutdownTimeoutPositive = "STAT-CONFIG-SHUTDOWN-TIMEOUT-POSITIVE";
     public const string ProjectionVersionPositive = "STAT-CONFIG-PROJECTION-VERSION-POSITIVE";
+    public const string ProjectionNameRequired = "STAT-CONFIG-PROJECTION-NAME-REQUIRED";
     public const string MappingVersionRequired = "STAT-CONFIG-MAPPING-VERSION-REQUIRED";
     public const string ModeUnsupported = "STAT-CONFIG-MODE-UNSUPPORTED";
     public const string CoverageStartRequired = "STAT-CONFIG-COVERAGE-START-REQUIRED";
@@ -17,6 +18,12 @@ internal static class ConfigurationValidationErrors
     public const string SafetyDelayNonNegative = "STAT-CONFIG-SAFETY-DELAY-NON-NEGATIVE";
     public const string OverlapNonNegative = "STAT-CONFIG-OVERLAP-NON-NEGATIVE";
     public const string DeepDiscoveryPositive = "STAT-CONFIG-DEEP-DISCOVERY-POSITIVE";
+    public const string LeaseDurationPositive = "STAT-CONFIG-LEASE-DURATION-POSITIVE";
+    public const string LeaseRenewIntervalPositive = "STAT-CONFIG-LEASE-RENEW-INTERVAL-POSITIVE";
+    public const string LeaseRenewBeforeExpiry = "STAT-CONFIG-LEASE-RENEW-BEFORE-EXPIRY";
+    public const string RetryCountPositive = "STAT-CONFIG-RETRY-COUNT-POSITIVE";
+    public const string RetryMinDelayPositive = "STAT-CONFIG-RETRY-MIN-DELAY-POSITIVE";
+    public const string RetryMaxDelayAfterMin = "STAT-CONFIG-RETRY-MAX-DELAY-AFTER-MIN";
     public const string ManualRangeRequired = "STAT-CONFIG-MANUAL-RANGE-REQUIRED";
     public const string ManualRangeOrdered = "STAT-CONFIG-MANUAL-RANGE-ORDERED";
     public const string ScopeIdPositive = "STAT-CONFIG-SCOPE-ID-POSITIVE";
@@ -78,6 +85,7 @@ public sealed class ProjectionOptionsValidator(IOptions<WorkerOptions> workerOpt
 
         var failures = new List<string>();
         if (!Enum.IsDefined(options.Mode)) failures.Add(ConfigurationValidationErrors.ModeUnsupported);
+        if (string.IsNullOrWhiteSpace(options.Name)) failures.Add(ConfigurationValidationErrors.ProjectionNameRequired);
         if (options.ProjectionVersion <= 0) failures.Add(ConfigurationValidationErrors.ProjectionVersionPositive);
         if (string.IsNullOrWhiteSpace(options.MappingVersion)) failures.Add(ConfigurationValidationErrors.MappingVersionRequired);
         if (!options.ResumeFromStoredDefinition && options.CoverageStartAtUtc is null)
@@ -91,6 +99,19 @@ public sealed class ProjectionOptionsValidator(IOptions<WorkerOptions> workerOpt
         if (options.ReadSafetyDelay < TimeSpan.Zero) failures.Add(ConfigurationValidationErrors.SafetyDelayNonNegative);
         if (options.OverlapWindow < TimeSpan.Zero) failures.Add(ConfigurationValidationErrors.OverlapNonNegative);
         if (options.DeepDiscoveryInterval <= TimeSpan.Zero) failures.Add(ConfigurationValidationErrors.DeepDiscoveryPositive);
+        if (options.LeaseDuration <= TimeSpan.Zero) failures.Add(ConfigurationValidationErrors.LeaseDurationPositive);
+        if (options.LeaseRenewInterval <= TimeSpan.Zero) failures.Add(ConfigurationValidationErrors.LeaseRenewIntervalPositive);
+        if (options.LeaseRenewInterval >= options.LeaseDuration)
+        {
+            failures.Add(ConfigurationValidationErrors.LeaseRenewBeforeExpiry);
+        }
+
+        if (options.PersistenceRetryCount <= 0) failures.Add(ConfigurationValidationErrors.RetryCountPositive);
+        if (options.RetryMinDelay <= TimeSpan.Zero) failures.Add(ConfigurationValidationErrors.RetryMinDelayPositive);
+        if (options.RetryMaxDelay < options.RetryMinDelay)
+        {
+            failures.Add(ConfigurationValidationErrors.RetryMaxDelayAfterMin);
+        }
 
         ValidateScope(options.Scope, failures);
         ValidateManualRange(options, failures);

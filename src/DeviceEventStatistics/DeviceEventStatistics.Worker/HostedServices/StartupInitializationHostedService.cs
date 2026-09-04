@@ -1,5 +1,8 @@
 using DeviceEventStatistics.Infrastructure.MongoDb;
+using DeviceEventStatistics.Infrastructure.MongoDb.Indexes;
 using DeviceEventStatistics.Infrastructure.SqlServer;
+using DeviceEventStatistics.Infrastructure.SqlServer.Schema;
+using DeviceEventStatistics.Application.Mapping;
 using DeviceEventStatistics.Worker.Configuration;
 using Microsoft.Extensions.Options;
 
@@ -26,11 +29,16 @@ public sealed class StartupInitializationHostedService(
         {
             var mongoContext = serviceProvider.GetRequiredService<MongoHistoryDbContext>();
             var sqlContext = serviceProvider.GetRequiredService<SqlStatisticsDbContext>();
+            var schemaVerifier = serviceProvider.GetRequiredService<SqlSchemaVerifier>();
+            var mongoIndexVerifier = serviceProvider.GetRequiredService<MongoHistoryIndexVerifier>();
+            _ = serviceProvider.GetRequiredService<DeviceMetricMapperRegistry>();
 
             await mongoContext.PingAsync(cancellationToken);
             await mongoContext.VerifyReadContractAsync(cancellationToken);
+            await mongoIndexVerifier.VerifyAsync(cancellationToken);
             await sqlContext.PingAsync(cancellationToken);
             await sqlContext.VerifyTargetAsync(cancellationToken);
+            await schemaVerifier.VerifyAsync(cancellationToken);
 
             readinessState.MarkReady();
             readinessBarrier.Open();

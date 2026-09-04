@@ -21,7 +21,7 @@ public sealed class MongoHistoryDatabaseOptions
     public string HistoryCollection { get; set; } = "device_event_history";
 
     public List<string> RequiredHistoryIndexNames { get; set; } =
-        ["ux_event_id"];
+        ["ux_event_id", "ix_statistics_persisted_event_id"];
 
     public void ApplyEnvironmentConnectionString()
     {

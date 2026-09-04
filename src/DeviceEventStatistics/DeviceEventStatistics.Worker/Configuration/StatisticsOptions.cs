@@ -25,6 +25,8 @@ public sealed class ProjectionOptions
 
     public ProjectionMode Mode { get; set; } = ProjectionMode.Incremental;
 
+    public string Name { get; set; } = "device_event_daily";
+
     public int ProjectionVersion { get; set; } = 1;
 
     public string MappingVersion { get; set; } = "v1";
@@ -44,6 +46,16 @@ public sealed class ProjectionOptions
     public TimeSpan OverlapWindow { get; set; } = TimeSpan.FromMinutes(5);
 
     public TimeSpan DeepDiscoveryInterval { get; set; } = TimeSpan.FromHours(6);
+
+    public TimeSpan LeaseDuration { get; set; } = TimeSpan.FromMinutes(2);
+
+    public TimeSpan LeaseRenewInterval { get; set; } = TimeSpan.FromSeconds(20);
+
+    public int PersistenceRetryCount { get; set; } = 5;
+
+    public TimeSpan RetryMinDelay { get; set; } = TimeSpan.FromSeconds(1);
+
+    public TimeSpan RetryMaxDelay { get; set; } = TimeSpan.FromSeconds(30);
 
     public ProjectionScopeOptions Scope { get; set; } = new();
 

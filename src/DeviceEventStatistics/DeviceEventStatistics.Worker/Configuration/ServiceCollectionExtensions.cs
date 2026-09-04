@@ -1,6 +1,19 @@
 using DeviceEventStatistics.Infrastructure.Configuration;
 using DeviceEventStatistics.Infrastructure.MongoDb;
 using DeviceEventStatistics.Infrastructure.SqlServer;
+using DeviceEventStatistics.Infrastructure.SqlServer.Execution;
+using DeviceEventStatistics.Infrastructure.SqlServer.Mapping;
+using DeviceEventStatistics.Infrastructure.SqlServer.Schema;
+using DeviceEventStatistics.Infrastructure.SqlServer.Stores;
+using DeviceEventStatistics.Infrastructure.Metadata;
+using DeviceEventStatistics.Infrastructure.MongoDb.Indexes;
+using DeviceEventStatistics.Infrastructure.MongoDb.Mapping;
+using DeviceEventStatistics.Infrastructure.MongoDb.Reading;
+using DeviceEventStatistics.Application.History;
+using DeviceEventStatistics.Application.Mapping;
+using DeviceEventStatistics.Application.Metadata;
+using DeviceEventStatistics.Application.Time;
+using DeviceEventStatistics.Application.Projection;
 using DeviceEventStatistics.Worker.HealthChecks;
 using Microsoft.Extensions.Options;
 using MongoDB.Driver;
@@ -91,6 +104,31 @@ public static class ServiceCollectionExtensions
                 options,
                 serviceProvider.GetRequiredService<IMongoClient>());
         });
+        services.AddSingleton<HistoryDocumentMapper>();
+        services.AddSingleton<IHistoryEventReader, MongoHistoryEventReader>();
+        services.AddSingleton<IHistoryRangeReader, MongoHistoryRangeReader>();
+        services.AddSingleton<IHistoryContractAuditReader, MongoHistoryContractAuditReader>();
+        services.AddSingleton<MongoHistoryIndexVerifier>();
+        services.AddSingleton<HistoryEventEligibilityPolicy>();
+        services.AddSingleton<EventOwnershipPolicy>();
+        services.AddSingleton<ProjectionEventOutcomeMapper>();
+        services.AddSingleton<VietnamStatisticsDateResolver>(serviceProvider =>
+        {
+            var options = serviceProvider.GetRequiredService<IOptions<MetadataOptions>>().Value;
+            return new VietnamStatisticsDateResolver(options.TimeZoneId);
+        });
+        services.AddSingleton<IDeviceMetadataResolver>(serviceProvider =>
+        {
+            var options = serviceProvider.GetRequiredService<IOptions<MetadataOptions>>().Value;
+            return new ConfigurationDeviceMetadataResolver(options.TimeZoneId, options.UtcOffsetMinutes);
+        });
+        services.AddSingleton<IDeviceMetricMapper, RawFileMetricMapper>();
+        services.AddSingleton<IDeviceMetricMapper, AppHubConnectionMetricMapper>();
+        services.AddSingleton<IDeviceMetricMapper, AppHubDeviceOnlineMetricMapper>();
+        services.AddSingleton<IDeviceMetricMapper, AppHubControlMetricMapper>();
+        services.AddSingleton<IDeviceMetricMapper, AppHubSensorMetricMapper>();
+        services.AddSingleton<IDeviceMetricMapper, AppHubScannerMetricMapper>();
+        services.AddSingleton<DeviceMetricMapperRegistry>();
 
         services.AddSingleton<SqlStatisticsDbContext>(serviceProvider =>
         {
@@ -99,6 +137,12 @@ public static class ServiceCollectionExtensions
                 .Value.SqlServer;
             return new SqlStatisticsDbContext(options);
         });
+        services.AddSingleton<SqlSchemaVerifier>();
+        services.AddSingleton<ProjectionTvpMapper>();
+        services.AddSingleton<SqlRetryPolicy>();
+        services.AddSingleton<SqlProjectionBatchOperations>();
+        services.AddSingleton<IProjectionLeaseStore, SqlProjectionLeaseStore>();
+        services.AddSingleton<IProjectionCheckpointStore, SqlProjectionCheckpointStore>();
 
         return services;
     }

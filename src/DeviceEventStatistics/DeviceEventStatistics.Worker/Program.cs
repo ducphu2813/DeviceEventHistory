@@ -22,10 +22,11 @@ var summary = redactor.CreateSummary(
     host.Services.GetRequiredService<IOptions<DatabaseSettingsOptions>>().Value);
 
 logger.LogInformation(
-    "Statistics configuration validated. Enabled={Enabled}, WorkerId={WorkerId}, Mode={Mode}, ProjectionVersion={ProjectionVersion}, MongoConnectionStringConfigured={MongoConnectionStringConfigured}, MongoDatabase={MongoDatabase}, HistoryCollection={HistoryCollection}, SqlConnectionStringConfigured={SqlConnectionStringConfigured}, SqlDatabase={SqlDatabase}, SqlSchema={SqlSchema}, CompanyScopeCount={CompanyScopeCount}, DeviceScopeCount={DeviceScopeCount}",
+    "Statistics configuration validated. Enabled={Enabled}, WorkerId={WorkerId}, Mode={Mode}, ProjectionName={ProjectionName}, ProjectionVersion={ProjectionVersion}, MongoConnectionStringConfigured={MongoConnectionStringConfigured}, MongoDatabase={MongoDatabase}, HistoryCollection={HistoryCollection}, SqlConnectionStringConfigured={SqlConnectionStringConfigured}, SqlDatabase={SqlDatabase}, SqlSchema={SqlSchema}, CompanyScopeCount={CompanyScopeCount}, DeviceScopeCount={DeviceScopeCount}",
     summary.Enabled,
     summary.WorkerId,
     summary.ProjectionMode,
+    summary.ProjectionName,
     summary.ProjectionVersion,
     summary.MongoConnectionStringConfigured,
     summary.MongoDatabaseName,
