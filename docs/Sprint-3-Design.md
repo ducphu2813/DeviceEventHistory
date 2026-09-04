@@ -380,11 +380,12 @@ LastPersistedAtUtc + LastEventId
 
 Mongo query:
 
-```text
-persistedAtUtc > lastPersistedAtUtc
-OR
-(persistedAtUtc == lastPersistedAtUtc AND eventId > lastEventId)
+Để loại trừ rủi ro mất sự kiện do lệch commit giữa các luồng ghi song song (Commit Skew / Clock Skew), Reader áp dụng chiến lược **Bounded Overlap Window**:
 
+```text
+fetchStartAtUtc = lastPersistedAtUtc - OverlapWindow (default 5m)
+
+persistedAtUtc >= fetchStartAtUtc
 ORDER BY persistedAtUtc ASC, eventId ASC
 LIMIT BatchSize
 ```
@@ -400,6 +401,7 @@ Rules:
 - `persistedAtUtc` là ingestion insertion time/cursor, không phải statistics day.
 - `timelineAtUtc` quyết định business ordering/date.
 - Canonical `eventId` phải normalized lowercase hex và compared ordinal.
+- Tính toàn vẹn Exactly-Once được bảo đảm tại tầng SQL thông qua bảng `ProcessedEvent` (loại bỏ các event đọc lặp lại trong Overlap Window).
 - Cursor chỉ advance qua contiguous batch có terminal SQL outcome.
 - V1 historical document thiếu cursor field đi explicit backfill/migration path, không làm normal loop đoán.
 - Operator không sửa checkpoint bằng cách tùy tiện; recovery procedure phải ghi audit.
@@ -410,9 +412,12 @@ Pseudo flow:
 
 ```text
 while not cancelled
-    renew/acquire lease
+    renew/acquire lease (nhận CurrentEpoch)
     checkpoint = load checkpoint
-    batch = read Mongo after checkpoint, bounded by BatchSize
+    
+    // Bounded Overlap Read
+    fetchStart = checkpoint.LastPersistedAtUtc - OverlapWindow
+    batch = read Mongo where persistedAtUtc >= fetchStart, bounded by BatchSize
 
     if batch empty
         record caught-up/lag
@@ -429,10 +434,11 @@ while not cancelled
         append terminal event outcome
 
     begin SQL transaction
-        idempotency gate by ProcessedEvent
+        verify LeaseOwner == CurrentOwner AND LeaseEpoch == CurrentEpoch AND unexpired
+        idempotency gate by ProcessedEvent (bỏ qua event đã ghi)
         apply only newly inserted event outcomes
         update grouped daily facts
-        apply ordered state changes
+        apply ordered state changes (hoặc enqueue ReconciliationRequest nếu out-of-order)
         update daily snapshots/quality/failures
         advance checkpoint to last event in source batch
     commit
@@ -602,10 +608,10 @@ MVP policy:
 1. Count metric vẫn được ghi idempotently.
 2. Nếu transition mới không sớm hơn current state cursor, apply incremental duration.
 3. Nếu transition out-of-order, không cố sửa duration bằng delta phỏng đoán.
-4. Đánh dấu affected `CompanyId + DeviceId + StatisticsDate` cần reconciliation.
-5. Reconciliation đọc lại ordered day range và replace exact snapshot.
+4. Ghi nhận `ReconciliationRequest` vào CSDL SQL Server bền vững cho dải ngày bị ảnh hưởng (từ `timelineAtUtc` đến `CurrentEdgeTimestamp`).
+5. Tiến trình Reconciliation chạy ngầm sẽ replay lại ordered timeline và cập nhật chính xác `DeviceDailySnapshot` cùng `DeviceStateCursor`.
 
-Interval qua midnight được split theo timezone. Opening state của ngày lấy từ last known state trước bucket start; nếu không có evidence thì `unknown`.
+Interval qua midnight được split theo timezone. Opening state của ngày lấy từ last known predecessor state trước bucket start (`timelineAtUtc < BucketStartAtUtc`); nếu không có evidence thì `unknown`.
 
 ## 17. Late event
 
@@ -616,7 +622,8 @@ Rules:
 - normal cursor vẫn advance theo persisted time;
 - daily count của ngày cũ được update;
 - `IsFinalized` của affected snapshot có thể trở lại false;
-- state transition out-of-order kích hoạt reconciliation;
+- state transition out-of-order kích hoạt enqueue `ReconciliationRequest` bền vững;
+- forward propagation đảm bảo cập nhật lan truyền từ ngày xảy ra late transition cho đến next boundary transition hoặc current state edge;
 - rolling reconciliation đảm bảo convergence;
 - không reset source checkpoint về ngày cũ.
 
@@ -630,16 +637,18 @@ Scheduling flow:
 
 ```text
 startup
-    -> read last successful reconciliation run
+    -> read pending requests from device_stats.ReconciliationRequest
+    -> read last successful rolling reconciliation run
     -> determine missed/required date windows
     -> wait until next configured schedule with cancellable delay
     -> request reconciliation from coordinator
 ```
 
-Không dựa hoàn toàn vào in-memory timer: sau restart, Worker kiểm tra `ProjectionRun` và chạy missed window theo policy.
+Không dựa hoàn toàn vào in-memory timer: sau restart, Worker quét bảng `ReconciliationRequest` và kiểm tra `ProjectionRun` để chạy các dải ngày chưa hoàn tất.
 
 Default proposal:
 
+- scheduler drain liên tục các `ReconciliationRequest` pending trong CSDL;
 - rolling reconciliation recent 3 ngày mỗi giờ hoặc theo configured interval;
 - finalize/reconcile ngày hôm qua sau local business-day boundary;
 - maximum một reconciliation run active;
@@ -649,15 +658,18 @@ Default proposal:
 Reconciliation algorithm:
 
 ```text
-acquire reconciliation lease/range lock
-read all eligible Mongo events for target business date/range
+acquire reconciliation lease/range lock (với LeaseEpoch)
+truy vấn Predecessor State: transition gần nhất trước First BucketStartAtUtc
+read all eligible Mongo events for target business date/range [FirstBucketStartAtUtc, LastBucketEndAtUtc)
 group/order from scratch using same mapping version
-calculate exact DeviceEventDaily + DeviceDailySnapshot
+calculate exact DeviceEventDaily + DeviceDailySnapshot (bao gồm opening/closing states)
 write staging/in-memory expected result
 acquire SQL writer gate briefly
 BEGIN TRANSACTION
+    verify LeaseOwner + LeaseEpoch
     replace affected daily rows/snapshots
     update state cursor only when range reaches current edge safely
+    resolve matching ReconciliationRequest (Status = 'Completed')
     resolve matching projection failures when applicable
     record ProjectionRun outcome
 COMMIT
@@ -764,15 +776,23 @@ Guardrails:
 Sprint 3 MVP:
 
 - một active incremental projector cho một `ProjectionName + ProjectionVersion + PartitionKey`;
-- một Mongo reader loop;
-- một SQL batch writer;
+- một Mongo reader loop với Bounded Overlap Replay;
+- một SQL batch writer được bảo vệ bằng Fencing Token (`LeaseEpoch`);
 - reconciliation/backfill không commit cùng target range với incremental writer;
-- in-process writer gate + SQL lease bảo vệ overlap;
+- in-process writer gate + SQL lease fencing token (`LeaseEpoch`) bảo vệ tuyệt đối chống split-brain / zombie worker;
 - cancellation token qua Mongo read, mapping boundary khi async, SQL command và delay.
 
 Không tạo một task/thread cho mỗi device.
 
 Metric mapping có thể parallelize CPU-bound trong batch sau benchmark, nhưng state transition của cùng device/state type phải tuần tự theo business order.
+
+Mọi transaction ghi dữ liệu (Incremental & Reconciliation) đều bắt buộc thực thi với điều kiện Fencing:
+```sql
+WHERE LeaseOwner = @CurrentOwner 
+  AND LeaseEpoch = @CurrentEpoch 
+  AND LeaseExpiresAtUtc > SYSUTCDATETIME()
+```
+Nếu kiểm tra thất bại, rollback toàn bộ transaction ngay lập tức để tránh ghi đè dữ liệu.
 
 ## 23. Backpressure và sizing
 
@@ -1115,12 +1135,14 @@ Rollback:
 
 ## 33. Các quyết định cần khóa trước implementation plan
 
-- SQL database/schema deployment thực tế và migration owner.
-- Statistics lag SLO và backlog catch-up SLO.
-- Authoritative timezone/device metadata source.
+- SQL database/schema deployment thực tế và migration owner (`device_stats` schema).
+- Cấu hình MongoDB Bounded Overlap Window (mặc định 5 phút) kết hợp `ProcessedEvent` để loại bỏ commit skew.
+- Quy tắc kiểm tra Fencing Token (`LeaseEpoch`) trên `ProjectionCheckpoint` trong mọi transaction ghi SQL.
+- Lược đồ bảng `device_stats.ReconciliationRequest` lưu trữ bền vững và quy tắc forward propagation cho multi-day state transition.
+- Authoritative timezone/device metadata source và cơ chế audit/trigger reconcile khi timezone thay đổi.
 - Initial metrics + source ownership sau Sprint 2 UAT.
 - Health Rule V1 hoặc quyết định defer score sang sub-phase sau daily facts.
 - Reconciliation interval/lookback và approved report maintenance window.
 - Active projection version selection cho future API.
-- Processed-event retention.
+- Processed-event retention policy.
 - Exact deployment mode cho manual backfill/rebuild invocation.

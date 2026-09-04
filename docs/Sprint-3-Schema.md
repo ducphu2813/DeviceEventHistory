@@ -118,6 +118,7 @@ device_stats.DeviceDailySnapshot
 device_stats.DeviceStateCursor
 device_stats.ProcessedEvent
 device_stats.ProjectionCheckpoint
+device_stats.ReconciliationRequest
 device_stats.ProjectionFailure
 device_stats.ProjectionRun
 device_stats.IngestionQualityDaily
@@ -132,7 +133,8 @@ DeviceDimension 1 ----- * DeviceEventDaily * ----- 1 MetricDefinition
        |
        `--------------- * DeviceStateCursor
 
-ProjectionCheckpoint ---- incremental cursor/lease
+ProjectionCheckpoint ---- incremental cursor/lease (với LeaseEpoch fencing)
+ReconciliationRequest --- hàng đợi bền vững lưu dirty ranges cần reconcile
 ProcessedEvent ----------- idempotency inbox
 ProjectionFailure -------- terminal/retry diagnostics
 ProjectionRun ------------ incremental/reconcile/backfill audit
@@ -157,6 +159,7 @@ CREATE TABLE [device_stats].[DeviceDimension]
     [GateCode]           nvarchar(100)  NULL,
     [GateName]           nvarchar(250)  NULL,
     [TimeZoneId]         nvarchar(100)  NOT NULL,
+    [TimeZoneEffectiveFromUtc] datetime2(7) NOT NULL DEFAULT '2000-01-01T00:00:00Z',
     [IsActive]           bit            NOT NULL,
     [MetadataSource]     varchar(64)    NOT NULL,
     [MetadataUpdatedAtUtc] datetime2(7) NOT NULL,
@@ -391,6 +394,12 @@ CREATE TABLE [device_stats].[DeviceDailySnapshot]
         ),
     CONSTRAINT [CK_DeviceDailySnapshot_Durations]
         CHECK ([OnlineSeconds] >= 0 AND [OfflineSeconds] >= 0 AND [UnknownSeconds] >= 0),
+    CONSTRAINT [CK_DeviceDailySnapshot_DurationTotal]
+        CHECK
+        (
+            [OnlineSeconds] + [OfflineSeconds] + [UnknownSeconds]
+            = DATEDIFF_BIG(SECOND, [BucketStartAtUtc], [BucketEndAtUtc])
+        ),
     CONSTRAINT [CK_DeviceDailySnapshot_Counts]
         CHECK
         (
@@ -541,6 +550,7 @@ CREATE TABLE [device_stats].[ProjectionCheckpoint]
     [LastBatchSize]         int           NOT NULL,
     [LeaseOwner]            varchar(200)  NULL,
     [LeaseExpiresAtUtc]     datetime2(7)  NULL,
+    [LeaseEpoch]            bigint        NOT NULL DEFAULT 0,
     [UpdatedAtUtc]          datetime2(7)  NOT NULL,
     [Version]               rowversion    NOT NULL,
 
@@ -576,9 +586,52 @@ Mongo query phải dùng cùng binary/ordinal semantics của canonical lowercas
 
 Checkpoint chỉ advance trong cùng SQL transaction đã xác nhận toàn bộ outcomes của contiguous batch. SQL/Mongo transient failure không advance checkpoint.
 
-Sprint 3 chạy một active incremental projector. Lease bảo vệ deployment overlap; nó không biến design thành active-active partitioned projector.
+Sprint 3 chạy một active incremental projector. Lease bảo vệ deployment overlap; nó không biến design thành active-active partitioned projector. Cột `LeaseEpoch` đóng vai trò Fencing Token: mọi transaction ghi dữ liệu (Incremental hoặc Reconcile) bắt buộc kiểm tra `LeaseOwner`, `LeaseExpiresAtUtc` và `LeaseEpoch` để loại bỏ rủi ro zombie/split-brain worker ghi đè dữ liệu.
 
-## 14. `ProjectionFailure`
+## 14. `ReconciliationRequest`
+
+Hàng đợi bền vững lưu trữ các yêu cầu tính toán lại (Reconciliation) khi phát sinh sự kiện chuyển trạng thái đến muộn (out-of-order) hoặc có thay đổi cấu hình múi giờ/metadata.
+
+```sql
+CREATE TABLE [device_stats].[ReconciliationRequest]
+(
+    [RequestId]             bigint         IDENTITY(1,1) NOT NULL,
+    [ProjectionName]        varchar(100)   NOT NULL,
+    [ProjectionVersion]     int            NOT NULL,
+    [CompanyId]             bigint         NOT NULL,
+    [DeviceId]              bigint         NOT NULL,
+    [StateType]             varchar(64)    NOT NULL,
+    [FromStatisticsDate]    date           NOT NULL,
+    [ToStatisticsDate]      date           NOT NULL,
+    [ReasonCode]            varchar(64)    NOT NULL,
+    [Status]                varchar(32)    NOT NULL DEFAULT 'Pending',
+    [AttemptCount]          int            NOT NULL DEFAULT 0,
+    [RequestedAtUtc]        datetime2(7)   NOT NULL,
+    [StartedAtUtc]          datetime2(7)   NULL,
+    [CompletedAtUtc]        datetime2(7)   NULL,
+    [ErrorSummary]          nvarchar(1000) NULL,
+    [Version]               rowversion     NOT NULL,
+
+    CONSTRAINT [PK_ReconciliationRequest]
+        PRIMARY KEY CLUSTERED ([RequestId]),
+    CONSTRAINT [CK_ReconciliationRequest_Dates]
+        CHECK ([FromStatisticsDate] <= [ToStatisticsDate]),
+    CONSTRAINT [CK_ReconciliationRequest_Status]
+        CHECK ([Status] IN ('Pending', 'Processing', 'Completed', 'Failed', 'Cancelled')),
+    CONSTRAINT [CK_ReconciliationRequest_Attempts]
+        CHECK ([AttemptCount] >= 0)
+);
+```
+
+Recommended indexes:
+
+```text
+IX_ReconciliationRequest_Status_Requested
+    (ProjectionName, ProjectionVersion, Status, RequestedAtUtc)
+    INCLUDE (CompanyId, DeviceId, StateType, FromStatisticsDate, ToStatisticsDate, AttemptCount)
+```
+
+## 15. `ProjectionFailure`
 
 Lưu event không thể aggregate do statistics contract, không copy raw payload.
 
