@@ -118,7 +118,8 @@ public sealed class CanonicalDeviceEventMapper : IRawRecordCanonicalMapper
                 ? new CanonicalDeviceEvent.TagReadFacts
                 {
                     TagId = tagId,
-                    RoutingFileId = fileId
+                    RoutingFileId = fileId,
+                    ReadTimeText = parsed.Header.ReadTimeText
                 }
                 : null,
             GateState = parsed.GateState is null

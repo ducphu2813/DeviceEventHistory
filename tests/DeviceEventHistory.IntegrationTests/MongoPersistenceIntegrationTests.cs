@@ -62,6 +62,15 @@ public sealed class MongoPersistenceIntegrationTests
                     .GetCollection(AppConst.MongoDb.HistoryCollection)
                     .CountDocumentsAsync(new BsonDocument("eventId", deviceEvent.EventId)));
 
+            var persistedDocument = await context
+                .GetCollection(AppConst.MongoDb.HistoryCollection)
+                .Find(new BsonDocument("eventId", deviceEvent.EventId))
+                .FirstAsync();
+            var persistedTagRead = persistedDocument["facts"]["tagRead"].AsBsonDocument;
+            Assert.Equal("TAG001", persistedTagRead["tagId"].AsString);
+            Assert.Equal("14:00:00", persistedTagRead["readTimeText"].AsString);
+            Assert.Equal(12, persistedTagRead["routingFileId"].AsInt64);
+
             var key = new IngestionCheckpointKey
             {
                 SourceId = deviceEvent.Source.SourceId,

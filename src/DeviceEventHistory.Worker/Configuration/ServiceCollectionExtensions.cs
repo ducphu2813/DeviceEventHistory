@@ -195,7 +195,8 @@ public static class ServiceCollectionExtensions
                     .Select(source => new AppHubSourceMappingOptions(
                         source.SourceId,
                         source.CompanyId,
-                        source.DedicatedSingleTenant))));
+                        source.DedicatedSingleTenant,
+                        source.TimeZoneId))));
         services.AddSingleton<AppHubTenantResolver>();
         services.AddSingleton<IRawSourceEventMapper, DeviceOnlineEventMapper>();
         services.AddSingleton<IRawSourceEventMapper, DeviceConnectionEventMapper>();

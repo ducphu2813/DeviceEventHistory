@@ -11,7 +11,7 @@ public sealed class AppHubMonitoringConnectionFactory : IAppHubMonitoringConnect
     {
         ArgumentNullException.ThrowIfNull(source);
 
-        var queryString = CreateCredentialQuery(source);
+        var queryString = AppHubSignalRQueryFactory.Create(source);
         var connection = new HubConnection(source.Endpoint.Trim(), queryString);
         var client = new SignalRClientAdapter(connection);
         return new AppHubMonitoringConnection(
@@ -19,47 +19,6 @@ public sealed class AppHubMonitoringConnectionFactory : IAppHubMonitoringConnect
             source.HubName.Trim(),
             client,
             Guid.NewGuid().ToString("N"));
-    }
-
-    private static IDictionary<string, string> CreateCredentialQuery(AppHubSourceOptions source)
-    {
-        var accessToken = GetConfiguredValue(
-            source.AccessToken,
-            source.AccessTokenEnvironmentVariable);
-        if (!string.IsNullOrWhiteSpace(accessToken))
-        {
-            return new Dictionary<string, string>(StringComparer.Ordinal)
-            {
-                ["token"] = accessToken
-            };
-        }
-
-        var jwtToken = GetConfiguredValue(
-            source.TokenJwt,
-            source.TokenJwtEnvironmentVariable);
-        if (!string.IsNullOrWhiteSpace(jwtToken))
-        {
-            return new Dictionary<string, string>(StringComparer.Ordinal)
-            {
-                ["tokenjwt"] = jwtToken
-            };
-        }
-
-        throw new InvalidOperationException(AppConst.Messages.MSG_APPHUB_CREDENTIAL_VALUE_REQUIRED);
-    }
-
-    private static string? GetConfiguredValue(
-        string? directValue,
-        string? environmentVariableName)
-    {
-        if (!string.IsNullOrWhiteSpace(directValue))
-        {
-            return directValue;
-        }
-
-        return string.IsNullOrWhiteSpace(environmentVariableName)
-            ? null
-            : Environment.GetEnvironmentVariable(environmentVariableName.Trim());
     }
 
     private sealed class SignalRClientAdapter(HubConnection connection) : IAppHubSignalRClient
@@ -104,6 +63,9 @@ public sealed class AppHubMonitoringConnectionFactory : IAppHubMonitoringConnect
 
         public Task JoinMonitoringAsync(CancellationToken cancellationToken) =>
             proxy.Invoke(AppConst.AppHub.JoinMonitoringMethod).WaitAsync(cancellationToken);
+
+        public Task JoinAntenAsync(CancellationToken cancellationToken) =>
+            proxy.Invoke(AppConst.AppHub.JoinAntenMethod).WaitAsync(cancellationToken);
     }
 
     private sealed class CallbackObserver(Action<object[]> callback) : IObserver<IList<JToken>>

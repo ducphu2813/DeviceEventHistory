@@ -42,6 +42,26 @@ internal static class AppHubJsonValueReader
                 ? value.ToString()
                 : null;
 
+    public static bool? ReadBoolean(JsonElement value) =>
+        value.ValueKind is JsonValueKind.True or JsonValueKind.False
+            ? value.GetBoolean()
+            : value.ValueKind == JsonValueKind.String
+                && bool.TryParse(value.GetString(), out var textValue)
+                ? textValue
+                : null;
+
+    public static double? ReadDouble(JsonElement value) =>
+        value.ValueKind == JsonValueKind.Number && value.TryGetDouble(out var number)
+            ? number
+            : value.ValueKind == JsonValueKind.String
+                && double.TryParse(
+                    value.GetString(),
+                    NumberStyles.Float,
+                    CultureInfo.InvariantCulture,
+                    out var textNumber)
+                    ? textNumber
+                    : null;
+
     public static DateTimeOffset? ReadLocalDateTime(JsonElement value)
     {
         if (value.ValueKind != JsonValueKind.String

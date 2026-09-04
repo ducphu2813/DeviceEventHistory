@@ -161,6 +161,7 @@ Cấu hình theo đúng cấu trúc `appsettings.Example.json`. Nội dung mẫu
           "HubName": "AppHub",
           "CompanyId": null,
           "DedicatedSingleTenant": false,
+          "TimeZoneId": "SE Asia Standard Time",
           "ChannelCapacity": 5000,
           "EnqueueTimeout": "00:00:00.100",
           "ReconnectMinDelay": "00:00:01",
@@ -437,7 +438,7 @@ Với mỗi case, tester ghi tối thiểu: `Test case ID`, thời điểm, envi
 - Callback được nhận chỉ sau khi connection đã start và join thành công.
 - Event có `sourceKind=erp_apphub`, `source.sourceId=erp-apphub-ua`, `source.transport=classic_signalr`.
 
-### TC-CONN-002 - Join group Monitoring
+### TC-CONN-002 - Join các group AppHub cần thiết
 
 **Các bước:**
 
@@ -447,9 +448,9 @@ Với mỗi case, tester ghi tối thiểu: `Test case ID`, thời điểm, envi
 
 **Kết quả mong đợi:**
 
-- Worker gọi `JoinMonitoring()` không argument sau connect.
+- Worker gọi `JoinMonitoring()` và `JoinAnten()` không argument sau connect.
 - Worker chỉ coi source sẵn sàng sau join thành công.
-- Event thuộc group Monitoring được nhận và lưu; event tạo trước khi join không được dùng để kết luận Worker phải nhận được.
+- Event thuộc group `Monitoring` được nhận và lưu; các event tag được phát qua group `Anten` cũng được nhận nếu callback tương ứng đã bật. Event tạo trước khi join không được dùng để kết luận Worker phải nhận được.
 - Không có join lặp vô hạn khi connection ổn định.
 
 ### TC-CONN-003 - Callback registration trước `Start()`
@@ -511,7 +512,7 @@ Với mỗi case, tester ghi tối thiểu: `Test case ID`, thời điểm, envi
 - Reconnect delay nằm trong configured min/max, có exponential backoff và jitter.
 - Connection mới có generation mới.
 - Callback được đăng ký lại đúng một lần trên connection mới.
-- `JoinMonitoring()` được gọi lại sau reconnect.
+- `JoinMonitoring()` và `JoinAnten()` được gọi lại sau reconnect.
 - Event sau khi rejoin được nhận/lưu.
 - Event trong khoảng disconnected có thể mất theo best-effort; không được đánh dấu là đã persist nếu không có evidence.
 
@@ -519,7 +520,7 @@ Với mỗi case, tester ghi tối thiểu: `Test case ID`, thời điểm, envi
 
 **Các bước:** Tạo disconnect/reconnect nhanh bằng thao tác trên endpoint Training hoặc theo quy trình network được tester phê duyệt.
 
-**Kết quả mong đợi:** Các lệnh join được serialize; không có duplicate concurrent `JoinMonitoring()`; không có callback registration trùng; source cuối cùng ở trạng thái ổn định sau khi connection hồi phục.
+**Kết quả mong đợi:** Các lệnh join được serialize; không có duplicate concurrent các lệnh join; không có callback registration trùng; source cuối cùng ở trạng thái ổn định sau khi connection hồi phục.
 
 ### TC-RECON-003 - Credential hết hạn khi reconnect
 

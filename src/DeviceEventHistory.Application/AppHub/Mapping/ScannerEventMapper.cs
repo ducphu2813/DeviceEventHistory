@@ -111,8 +111,7 @@ public sealed class ScannerEventMapper(
             warnings,
             isSnapshot
                 ? AppConst.DeliveryKinds.Snapshot
-                : AppConst.AppHub.DeliveryKind,
-            occurredAtLocal: connectedAtLocal);
+                : AppConst.AppHub.DeliveryKind);
     }
 
     private static DateTimeOffset? ReadConnectedAtLocal(

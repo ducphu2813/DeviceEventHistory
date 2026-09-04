@@ -11,11 +11,13 @@ public sealed class AppHubMappingContext
     private AppHubMappingContext(
         RawSourceEvent sourceEvent,
         JsonElement? payload,
-        AppHubTenantResolution tenant)
+        AppHubTenantResolution tenant,
+        TimeZoneInfo sourceTimeZone)
     {
         SourceEvent = sourceEvent;
         Payload = payload;
         Tenant = tenant;
+        SourceTimeZone = sourceTimeZone;
     }
 
     public RawSourceEvent SourceEvent { get; }
@@ -23,6 +25,8 @@ public sealed class AppHubMappingContext
     public JsonElement? Payload { get; }
 
     public AppHubTenantResolution Tenant { get; }
+
+    public TimeZoneInfo SourceTimeZone { get; }
 
     public static AppHubMappingContext Create(
         RawSourceEvent sourceEvent,
@@ -36,7 +40,8 @@ public sealed class AppHubMappingContext
         return new AppHubMappingContext(
             sourceEvent,
             payload?.Clone(),
-            tenantResolver.Resolve(sourceEvent.SourceId, payload));
+            tenantResolver.Resolve(sourceEvent.SourceId, payload),
+            tenantResolver.ResolveTimeZone(sourceEvent.SourceId));
     }
 
     public static CanonicalIngestionResult CreateFailure(
@@ -86,15 +91,40 @@ public sealed class AppHubMappingContext
         string? deliveryKind = null,
         DateTimeOffset? occurredAtUtc = null,
         DateTimeOffset? occurredAtLocal = null) =>
-        CanonicalIngestionResult.FromEvent(new CanonicalDeviceEvent
+        CanonicalIngestionResult.FromEvent(CreateCanonicalEvent(
+            category,
+            facts,
+            device,
+            parseStatus,
+            warnings,
+            deliveryKind,
+            occurredAtUtc,
+            occurredAtLocal));
+
+    private CanonicalDeviceEvent CreateCanonicalEvent(
+        string category,
+        CanonicalDeviceEvent.FactsContext facts,
+        CanonicalDeviceEvent.DeviceContext? device,
+        string parseStatus,
+        IReadOnlyList<string>? warnings,
+        string? deliveryKind,
+        DateTimeOffset? occurredAtUtc,
+        DateTimeOffset? occurredAtLocal)
+    {
+        var sourceOccurredAtUtc = occurredAtUtc ?? SourceEvent.OccurredAtUtc;
+        var effectiveOccurredAtUtc = sourceOccurredAtUtc ?? SourceEvent.ReceivedAtUtc;
+        var effectiveOccurredAtLocal = occurredAtLocal
+            ?? TimeZoneInfo.ConvertTime(effectiveOccurredAtUtc, SourceTimeZone);
+
+        return new CanonicalDeviceEvent
         {
             EventId = SourceEvent.IngestionEventId,
             SchemaVersion = AppConst.SchemaVersions.CanonicalV2,
             Category = category,
             SourceKind = SourceEvent.SourceKind,
             CompanyId = Tenant.CompanyId!.Value,
-            OccurredAtUtc = occurredAtUtc,
-            OccurredAtLocal = occurredAtLocal,
+            OccurredAtUtc = effectiveOccurredAtUtc,
+            OccurredAtLocal = effectiveOccurredAtLocal,
             ReceivedAtUtc = SourceEvent.ReceivedAtUtc,
             Source = CreateSourceContext(deliveryKind),
             Device = device,
@@ -112,7 +142,13 @@ public sealed class AppHubMappingContext
                 ParserVersion = AppConst.AppHub.ParserVersion,
                 Warnings = warnings ?? []
             }
-        });
+        } with
+        {
+            TimeBasis = sourceOccurredAtUtc.HasValue
+                ? AppConst.TimeBases.Occurred
+                : AppConst.TimeBases.Received
+        };
+    }
 
     public CanonicalIngestionResult CreateFailure(
         string code,

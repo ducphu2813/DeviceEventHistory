@@ -97,6 +97,35 @@ public static class AppConst
         public const string PayloadFormat = "signalr-arguments-json-v1";
         public const string DefaultHubName = "AppHub";
         public const string JoinMonitoringMethod = "JoinMonitoring";
+        public const string JoinAntenMethod = "JoinAnten";
+        public const string AccessTokenQueryKey = "token";
+        public const string JwtTokenQueryKey = "tokenjwt";
+        public const string SessionTypeQueryKey = "sessionType";
+        public const string AccountSessionTypeValue = "0";
+
+        public static class PayloadFields
+        {
+            public const string DeviceId = "DeviceId";
+            public const string TagId = "TagId";
+            public const string Epc = "Epc";
+            public const string DeviceCode = "DeviceCode";
+            public const string DeviceName = "DeviceName";
+            public const string GateId = "GateId";
+            public const string GateCode = "GateCode";
+            public const string GateName = "GateName";
+            public const string IsStart = "IsStart";
+            public const string IsUsed = "IsUsed";
+            public const string IsConnecting = "IsConnecting";
+            public const string IsConnected = "IsConnected";
+            public const string IsGreenLighting = "IsGreenLighting";
+            public const string IsRedLighting = "IsRedLighting";
+            public const string IsActive = "IsActive";
+            public const string GateState = "GateState";
+            public const string On = "On";
+            public const string Timeout = "Timeout";
+            public const string SerialPortName = "SerialPort_PortName";
+            public const string IpDevice = "IpDevice";
+        }
 
         public static class UserState
         {
@@ -230,7 +259,7 @@ public static class AppConst
         public const string AppHubSourceConnectionFailedMessage =
             "ERP AppHub source connection failed for SourceId={SourceId}.";
         public const string AppHubSourceConnectedMessage =
-            "ERP AppHub source connected and joined Monitoring for SourceId={SourceId}, Generation={Generation}.";
+            "ERP AppHub source connected and joined Monitoring and Anten for SourceId={SourceId}, Generation={Generation}.";
         public const string AppHubSourceDisconnectedMessage =
             "ERP AppHub source disconnected for SourceId={SourceId}.";
         public const string AppHubSourceReconnectScheduledMessage =
@@ -539,9 +568,18 @@ public static class AppConst
     public static class CanonicalValues
     {
         public const string ConnectionStatusConnected = "connected";
+        public const string ConnectionStatusConnecting = "connecting";
         public const string ConnectionStatusDisconnected = "disconnected";
         public const string ConnectionStatusUnknown = "unknown";
         public const string ScannerDeviceType = "scanner";
+        public const string DeviceControlGreenLight = "green_light";
+        public const string DeviceControlRedLight = "red_light";
+        public const string DeviceControlStateOn = "on";
+        public const string DeviceControlStateOff = "off";
+        public const string DeviceSensorTime = "time_sensor";
+        public const string DeviceSensorStateActive = "active";
+        public const string DeviceSensorStateTimeout = "timeout";
+        public const string DeviceSensorTimeoutUnitSeconds = "seconds";
     }
 
     public static class IngestionStages

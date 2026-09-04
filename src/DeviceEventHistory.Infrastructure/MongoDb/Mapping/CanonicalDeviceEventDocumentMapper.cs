@@ -138,14 +138,20 @@ internal static class CanonicalDeviceEventDocumentMapper
         return document;
     }
 
-    private static BsonDocument? MapTagRead(CanonicalDeviceEvent.TagReadFacts? facts) =>
-        facts is null
-            ? null
-            : new BsonDocument
-            {
-                { "tagId", facts.TagId },
-                { "routingFileId", facts.RoutingFileId }
-            };
+    private static BsonDocument? MapTagRead(CanonicalDeviceEvent.TagReadFacts? facts)
+    {
+        if (facts is null)
+        {
+            return null;
+        }
+
+        var document = new BsonDocument();
+        AddOptional(document, "tagId", MongoDocumentValue.String(facts.TagId));
+        AddOptional(document, "epcRaw", MongoDocumentValue.String(facts.EpcRaw));
+        AddOptional(document, "routingFileId", MongoDocumentValue.Int64(facts.RoutingFileId));
+        AddOptional(document, "readTimeText", MongoDocumentValue.String(facts.ReadTimeText));
+        return document;
+    }
 
     private static BsonDocument? MapGateState(CanonicalDeviceEvent.GateStateFacts? facts)
     {
@@ -232,6 +238,15 @@ internal static class CanonicalDeviceEventDocumentMapper
         var document = new BsonDocument();
         AddOptional(document, "status", MongoDocumentValue.String(facts.Status));
         AddOptional(document, "reason", MongoDocumentValue.String(facts.Reason));
+        AddOptional(document, "isStart", facts.IsStart is bool isStart
+            ? new BsonBoolean(isStart)
+            : null);
+        AddOptional(document, "isConnecting", facts.IsConnecting is bool isConnecting
+            ? new BsonBoolean(isConnecting)
+            : null);
+        AddOptional(document, "isConnected", facts.IsConnected is bool isConnected
+            ? new BsonBoolean(isConnected)
+            : null);
         AddOptional(document, "isSourceConnected", facts.IsSourceConnected is bool connected
             ? new BsonBoolean(connected)
             : null);
@@ -255,6 +270,25 @@ internal static class CanonicalDeviceEventDocumentMapper
             ? new BsonBoolean(snapshot)
             : null);
         AddOptional(document, "sourceState", MongoDocumentValue.String(facts.SourceState));
+        AddOptional(document, "isStart", facts.IsStart is bool isStart
+            ? new BsonBoolean(isStart)
+            : null);
+        AddOptional(document, "isUsed", facts.IsUsed is bool isUsed
+            ? new BsonBoolean(isUsed)
+            : null);
+        AddOptional(document, "isConnecting", facts.IsConnecting is bool isConnecting
+            ? new BsonBoolean(isConnecting)
+            : null);
+        AddOptional(document, "isConnected", facts.IsConnected is bool isConnected
+            ? new BsonBoolean(isConnected)
+            : null);
+        AddOptional(document, "isGreenLighting", facts.IsGreenLighting is bool isGreenLighting
+            ? new BsonBoolean(isGreenLighting)
+            : null);
+        AddOptional(document, "isRedLighting", facts.IsRedLighting is bool isRedLighting
+            ? new BsonBoolean(isRedLighting)
+            : null);
+        AddOptional(document, "gateState", MongoDocumentValue.String(facts.GateState));
         return document;
     }
 
