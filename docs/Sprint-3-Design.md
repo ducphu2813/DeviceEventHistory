@@ -5,7 +5,7 @@
 - Trạng thái: thiết kế trước implementation plan.
 - Mục tiêu: tạo statistics read model theo device/day từ MongoDB Device Event History.
 - Runtime mới: `.NET 10` `DeviceEventStatistics.Worker`.
-- Target database: SQL Server hiện có của hệ thống Report ERP, được cô lập bằng database hoặc schema `device_stats`.
+- Target database: SQL Server hiện có của hệ thống Report ERP, sử dụng schema mặc định `dbo`.
 - SQL contract: `Sprint-3-Schema.md`.
 - Source Mongo contract: `Sprint-2-Db-Schema.md`.
 - Expected volume ban đầu: khoảng 100.000 history events/ngày, có burst và backlog sau downtime.
@@ -28,7 +28,7 @@ MongoDB device_event_history
     -> incremental read
     -> statistics classification
     -> daily aggregate/state projection
-    -> SQL Server device_stats
+    -> SQL Server dbo
 ```
 
 Kết quả mong muốn:
@@ -126,7 +126,7 @@ ERP AppHub Monitoring --------------------+--> DeviceEventHistory.Worker
                                       +--------------+--------------+
                                                      |
                                                      v
-                                           SQL Server device_stats
+                                           SQL Server dbo
                                                      |
                                                      v
                                          future Report API / charts
@@ -350,7 +350,7 @@ Host.CreateApplicationBuilder
     -> log redacted configuration summary
     -> verify Mongo connectivity/read permission
     -> verify SQL connectivity
-    -> verify expected device_stats schema version
+    -> verify expected dbo schema version
     -> load/validate MetricDefinition registry
     -> acquire projection lease
     -> load/create ProjectionCheckpoint
@@ -637,7 +637,7 @@ Scheduling flow:
 
 ```text
 startup
-    -> read pending requests from device_stats.ReconciliationRequest
+    -> read pending requests from dbo.ReconciliationRequest
     -> read last successful rolling reconciliation run
     -> determine missed/required date windows
     -> wait until next configured schedule with cancellable delay
@@ -853,8 +853,8 @@ Ví dụ không chứa secret:
       "HistoryCollection": "device_event_history"
     },
     "SqlServer": {
-      "DatabaseName": "erp_reporting",
-      "SchemaName": "device_stats",
+      "DatabaseName": "UA-REPORTING-DB",
+      "SchemaName": "dbo",
       "CommandTimeout": "00:00:30"
     },
     "Reconciliation": {
@@ -1006,7 +1006,7 @@ Không có source event mới nhưng checkpoint caught-up không phải unhealth
 ## 29. Security và deployment isolation
 
 - Mongo account read-only `device_event_history`.
-- SQL Worker account chỉ SELECT/INSERT/UPDATE/DELETE cần thiết trong `device_stats`; migration identity riêng nếu có thể.
+- SQL Worker account chỉ SELECT/INSERT/UPDATE/DELETE cần thiết trong `dbo`; migration identity riêng nếu có thể.
 - Report account read-only.
 - Không reuse Hangfire schema/account/queue.
 - Không tạo trigger/cross-database write vào ERP.
@@ -1094,7 +1094,7 @@ Scenarios:
 ## 31. Rollout
 
 ```text
-1. Apply device_stats schema/migrations.
+1. Apply dbo schema/migrations.
 2. Deploy Statistics Worker với Enabled=false.
 3. Verify Mongo index và SQL/report impact.
 4. Seed/validate metric registry, timezone và ownership.
@@ -1135,10 +1135,10 @@ Rollback:
 
 ## 33. Các quyết định cần khóa trước implementation plan
 
-- SQL database/schema deployment thực tế và migration owner (`device_stats` schema).
+- SQL database/schema deployment thực tế và migration owner (`dbo` schema).
 - Cấu hình MongoDB Bounded Overlap Window (mặc định 5 phút) kết hợp `ProcessedEvent` để loại bỏ commit skew.
 - Quy tắc kiểm tra Fencing Token (`LeaseEpoch`) trên `ProjectionCheckpoint` trong mọi transaction ghi SQL.
-- Lược đồ bảng `device_stats.ReconciliationRequest` lưu trữ bền vững và quy tắc forward propagation cho multi-day state transition.
+- Lược đồ bảng `dbo.ReconciliationRequest` lưu trữ bền vững và quy tắc forward propagation cho multi-day state transition.
 - Authoritative timezone/device metadata source và cơ chế audit/trigger reconcile khi timezone thay đổi.
 - Initial metrics + source ownership sau Sprint 2 UAT.
 - Health Rule V1 hoặc quyết định defer score sang sub-phase sau daily facts.

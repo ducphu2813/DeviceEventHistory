@@ -25,7 +25,7 @@ public sealed class PhaseTwoArtifactTests
     }
 
     [Fact]
-    public void SQL_migrations_keep_statistics_objects_in_the_dedicated_schema()
+    public void SQL_migrations_keep_statistics_objects_in_the_configured_dbo_schema()
     {
         var root = FindRepositoryRoot();
         var migrationDirectory = Path.Combine(

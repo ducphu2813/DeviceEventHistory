@@ -7,7 +7,7 @@ param(
     [string]$DatabaseName,
 
     [Parameter(Mandatory = $false)]
-    [string]$SchemaName = "device_stats",
+    [string]$SchemaName = "dbo",
 
     [Parameter(Mandatory = $false)]
     [string]$MigrationPath = (Join-Path $PSScriptRoot "..\..\src\DeviceEventStatistics\DeviceEventStatistics.Infrastructure\SqlServer\Migrations")

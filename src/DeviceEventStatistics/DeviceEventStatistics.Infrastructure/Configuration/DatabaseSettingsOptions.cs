@@ -40,9 +40,9 @@ public sealed class SqlStatisticsDatabaseOptions
     public string ConnectionStringEnvironmentVariable { get; set; } =
         "DEVICE_EVENT_STATISTICS_SQL_CONNECTION_STRING";
 
-    public string DatabaseName { get; set; } = "device_event_statistics";
+    public string DatabaseName { get; set; } = "UA-REPORTING-DB";
 
-    public string SchemaName { get; set; } = "device_stats";
+    public string SchemaName { get; set; } = "dbo";
 
     public int CommandTimeoutSeconds { get; set; } = 30;
 

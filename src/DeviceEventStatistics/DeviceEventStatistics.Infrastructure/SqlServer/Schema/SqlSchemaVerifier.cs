@@ -75,9 +75,9 @@ public sealed class SqlSchemaVerifier(
     private async Task VerifyMigrationAsync(SqlConnection connection, CancellationToken cancellationToken)
     {
         await using var command = connection.CreateCommand();
-        command.CommandText = """
+        command.CommandText = $"""
             SELECT [Checksum]
-            FROM [device_stats].[SchemaMigration]
+            FROM {QuoteIdentifier(options.SchemaName)}.[SchemaMigration]
             WHERE [MigrationId] = @migrationId;
             """;
         command.CommandTimeout = options.CommandTimeoutSeconds;

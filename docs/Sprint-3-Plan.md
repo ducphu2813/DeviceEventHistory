@@ -17,7 +17,7 @@ Các ngưỡng tuning trong Plan là cấu hình khởi điểm cho UAT. Team đ
 | Hạng mục | Quyết định |
 |---|---|
 | Runtime | Thêm `.NET 10` `DeviceEventStatistics.Worker`, executable/deployment riêng |
-| SQL | Database riêng, ví dụ `device_event_statistics`; schema `device_stats` |
+| SQL | Database Report ERP `UA-REPORTING-DB`; schema mặc định `dbo` |
 | Configuration | Mongo và SQL có options/connection string riêng dưới `DatabaseSettings` |
 | Context | `MongoHistoryDbContext` và `SqlStatisticsDbContext` riêng trong Infrastructure |
 | SQL access | `Microsoft.Data.SqlClient`, parameterized commands/TVP, SQL-local transaction; không thêm EF Core trong Sprint 3 |
@@ -52,8 +52,8 @@ RFID raw-log + ERP AppHub
           -> daily facts / state / reconciliation
                   |
                   v
-       SQL database device_event_statistics
-          schema device_stats
+       SQL database UA-REPORTING-DB
+          schema dbo
 ```
 
 ### 3.1. Dependency và trách nhiệm
@@ -459,7 +459,7 @@ Deep discovery admission chạy trước. Reconcile sửa tập đã admission, 
     "WorkerId": "device-event-statistics-worker-01",
     "DatabaseSettings": {
       "MongoDb": { "ConnectionString": "", "DatabaseName": "device_event_history", "HistoryCollection": "device_event_history" },
-      "SqlServer": { "ConnectionString": "", "DatabaseName": "device_event_statistics", "SchemaName": "device_stats", "CommandTimeout": "00:00:30" }
+      "SqlServer": { "ConnectionString": "", "DatabaseName": "UA-REPORTING-DB", "SchemaName": "dbo", "CommandTimeout": "00:00:30" }
     },
     "Projection": {
       "Name": "device_event_daily", "Version": 1, "Mode": "Incremental", "CoverageStartAtUtc": null,

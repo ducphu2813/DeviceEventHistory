@@ -3,7 +3,7 @@
 Apply the SQL migrations with a deployment identity before enabling the
 Statistics Worker.
 
-    .\Apply-SqlMigrations.ps1 -ConnectionString $env:DEVICE_EVENT_STATISTICS_SQL_CONNECTION_STRING -DatabaseName device_event_statistics -SchemaName device_stats
+    .\Apply-SqlMigrations.ps1 -ConnectionString $env:DEVICE_EVENT_STATISTICS_SQL_CONNECTION_STRING -DatabaseName UA-REPORTING-DB -SchemaName dbo
 
 The script validates the resolved database, applies migrations in filename
 order, stores a SHA-256 checksum in SchemaMigration, and refuses to continue
