@@ -14,6 +14,8 @@ public sealed class AppHubDeviceOnlineMetricMapper : IDeviceMetricMapper
             "deviceOnline")
     ];
 
+    public IReadOnlyCollection<string> MetricCodes { get; } = ["device_online_observed"];
+
     public IReadOnlyList<MetricContributionDraft> Map(
         HistoryEvent historyEvent,
         StatisticsBucket bucket) =>

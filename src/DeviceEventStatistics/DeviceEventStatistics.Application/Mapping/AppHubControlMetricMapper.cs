@@ -11,6 +11,9 @@ public sealed class AppHubControlMetricMapper : IDeviceMetricMapper
         MetricMapperKeyExtensions.CreateKey("erp_apphub", "device_control_state", "receiveRedState", "deviceControlState")
     ];
 
+    public IReadOnlyCollection<string> MetricCodes { get; } =
+        ["green_light_on", "green_light_off", "red_light_on", "red_light_off"];
+
     public IReadOnlyList<MetricContributionDraft> Map(HistoryEvent historyEvent, StatisticsBucket bucket)
     {
         var facts = historyEvent.Facts.DeviceControlState;

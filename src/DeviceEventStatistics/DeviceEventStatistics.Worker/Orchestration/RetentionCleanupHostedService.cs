@@ -28,7 +28,7 @@ public sealed class RetentionCleanupHostedService(
             return;
         }
 
-        using var timer = new PeriodicTimer(TimeSpan.FromHours(24));
+        using var timer = new PeriodicTimer(TimeSpan.FromHours(24), timeProvider);
         do
         {
             await RunOnceAsync(stoppingToken);

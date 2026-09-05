@@ -19,6 +19,7 @@ public sealed class StartupInitializationHostedService(
     IOptions<MetadataOptions> metadataOptions,
     IProjectionDefinitionResolver definitionResolver,
     ProjectionDefinitionRuntimeState runtimeDefinition,
+    IMetricKeyResolver metricKeyResolver,
     ILogger<StartupInitializationHostedService> logger) : IHostedService
 {
     public async Task StartAsync(CancellationToken cancellationToken)
@@ -37,7 +38,7 @@ public sealed class StartupInitializationHostedService(
             var sqlContext = serviceProvider.GetRequiredService<SqlStatisticsDbContext>();
             var schemaVerifier = serviceProvider.GetRequiredService<SqlSchemaVerifier>();
             var mongoIndexVerifier = serviceProvider.GetRequiredService<MongoHistoryIndexVerifier>();
-            _ = serviceProvider.GetRequiredService<DeviceMetricMapperRegistry>();
+            var mapperRegistry = serviceProvider.GetRequiredService<DeviceMetricMapperRegistry>();
 
             await mongoContext.PingAsync(cancellationToken);
             await mongoContext.VerifyReadContractAsync(cancellationToken);
@@ -47,6 +48,20 @@ public sealed class StartupInitializationHostedService(
             await schemaVerifier.VerifyAsync(cancellationToken);
 
             var settings = projectionOptions.Value;
+            var metricRegistry = await metricKeyResolver.ResolveRegistryAsync(
+                new MetricRegistryIdentity(
+                    settings.MetricSetVersion,
+                    settings.MappingVersion,
+                    EventOwnershipPolicy.Version),
+                mapperRegistry.RequiredMetricCodes,
+                cancellationToken);
+            logger.LogInformation(
+                StatisticsContractConstants.Messages.MSG_LOG_METRIC_REGISTRY_VERIFIED,
+                metricRegistry.Identity.MetricSetVersion,
+                metricRegistry.Identity.MappingVersion,
+                metricRegistry.Identity.OwnershipVersion,
+                metricRegistry.Count);
+
             var definition = await definitionResolver.ResolveAsync(
                 new ProjectionDefinitionResolutionRequest(
                     new ProjectionIdentity(

@@ -194,6 +194,9 @@ public static class ServiceCollectionExtensions
         this IServiceCollection services)
     {
         services.AddHealthChecks()
+            .AddCheck<ProcessLivenessHealthCheck>(
+                "statistics_process_liveness",
+                tags: ["live"])
             .AddCheck<StartupReadinessHealthCheck>(
                 "statistics_startup_readiness",
                 tags: ["ready", "startup"])

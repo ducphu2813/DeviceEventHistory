@@ -38,7 +38,9 @@ public static class StatisticsContractConstants
         public const string Draining = "draining";
         public const string LeaseNotHeld = "lease_not_held";
         public const string UnrecoverableCoverage = "unrecoverable_coverage";
+        public const string SourceRetentionRisk = "source_retention_risk";
         public const string LagSloBreached = "lag_slo_breached";
+        public const string PendingRequestAge = "pending_request_age";
         public const string LagOrRetentionWarning = "lag_or_retention_warning";
         public const string CaughtUp = "caught_up";
     }
@@ -83,6 +85,16 @@ public static class StatisticsContractConstants
             "STAT-SQL-TYPES-MISSING: Required table types are missing: {0}.";
         public const string MSG_SQL_METRIC_REGISTRY_MISSING =
             "STAT-SQL-METRIC-REGISTRY-MISSING: Metric set version 1 has not been seeded.";
+        public const string MSG_SQL_METRIC_REGISTRY_REQUIRED_MISSING =
+            "STAT-SQL-METRIC-REGISTRY-REQUIRED-MISSING: Required metric codes are missing: {0}.";
+        public const string MSG_SQL_METRIC_REGISTRY_DISABLED =
+            "STAT-SQL-METRIC-REGISTRY-DISABLED: Required metric codes are disabled: {0}.";
+        public const string MSG_SQL_METRIC_REGISTRY_DUPLICATE =
+            "STAT-SQL-METRIC-REGISTRY-DUPLICATE: Required metric codes have duplicate logical rows: {0}.";
+        public const string MSG_SQL_METRIC_REGISTRY_VERSION_MISMATCH =
+            "STAT-SQL-METRIC-REGISTRY-VERSION-MISMATCH: Required metric codes do not match the active mapping or ownership version: {0}.";
+        public const string MSG_SQL_METRIC_REGISTRY_INVALID =
+            "STAT-SQL-METRIC-REGISTRY-INVALID: Required metric codes have an invalid metric key: {0}.";
         public const string MSG_SQL_SESSION_COMPLETED =
             "STAT-SQL-SESSION-COMPLETED: The SQL projection session is already completed.";
         public const string MSG_SQL_CHECKPOINT_CREATE_FAILED =
@@ -209,6 +221,8 @@ public static class StatisticsContractConstants
             "Statistics worker is disabled; stopping the host without opening a processing loop.";
         public const string MSG_LOG_STARTUP_READY =
             "Statistics startup preflight completed successfully.";
+        public const string MSG_LOG_METRIC_REGISTRY_VERIFIED =
+            "Statistics metric registry verified. MetricSetVersion={MetricSetVersion}, MappingVersion={MappingVersion}, OwnershipVersion={OwnershipVersion}, MetricCount={MetricCount}.";
         public const string MSG_LOG_STARTUP_FAILED =
             "Statistics startup preflight failed. FailureCode={FailureCode}";
         public const string MSG_LOG_CONFIGURATION_VALIDATED =

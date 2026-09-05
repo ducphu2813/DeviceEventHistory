@@ -17,6 +17,7 @@ public sealed class HistoryContractAuditHostedService(
     ProjectionDefinitionRuntimeState runtimeDefinition,
     IOptions<WorkerOptions> workerOptions,
     IOptions<ProjectionOptions> projectionOptions,
+    TimeProvider timeProvider,
     IStatisticsTelemetry telemetry,
     GracefulShutdownCoordinator shutdownCoordinator,
     ILogger<HistoryContractAuditHostedService> logger) : BackgroundService
@@ -40,7 +41,7 @@ public sealed class HistoryContractAuditHostedService(
             ["Operation"] = "HistoryContractAudit"
         });
 
-        using var timer = new PeriodicTimer(settings.DeepDiscoveryInterval);
+        using var timer = new PeriodicTimer(settings.DeepDiscoveryInterval, timeProvider);
         do
         {
             await RunCycleAsync(stoppingToken);

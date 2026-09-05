@@ -9,6 +9,7 @@ public sealed class LeaseHeartbeatHostedService(
     StartupReadinessBarrier readinessBarrier,
     IOptions<WorkerOptions> workerOptions,
     IOptions<ProjectionOptions> projectionOptions,
+    TimeProvider timeProvider,
     ILogger<LeaseHeartbeatHostedService> logger) : BackgroundService
 {
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -19,7 +20,7 @@ public sealed class LeaseHeartbeatHostedService(
             return;
         }
 
-        using var timer = new PeriodicTimer(projectionOptions.Value.LeaseRenewInterval);
+        using var timer = new PeriodicTimer(projectionOptions.Value.LeaseRenewInterval, timeProvider);
         while (await timer.WaitForNextTickAsync(stoppingToken))
         {
             try

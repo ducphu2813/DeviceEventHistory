@@ -10,8 +10,9 @@ public sealed class DeviceMetricMapperRegistry
 
     public DeviceMetricMapperRegistry(IEnumerable<IDeviceMetricMapper> metricMappers)
     {
+        var registeredMappers = metricMappers.ToArray();
         var entries = new Dictionary<string, IDeviceMetricMapper>(StringComparer.Ordinal);
-        foreach (var mapper in metricMappers)
+        foreach (var mapper in registeredMappers)
         {
             foreach (var key in mapper.Keys)
             {
@@ -26,7 +27,14 @@ public sealed class DeviceMetricMapperRegistry
         }
 
         mappers = entries;
+        RequiredMetricCodes = registeredMappers
+            .SelectMany(mapper => mapper.MetricCodes)
+            .Distinct(StringComparer.Ordinal)
+            .OrderBy(code => code, StringComparer.Ordinal)
+            .ToArray();
     }
+
+    public IReadOnlyCollection<string> RequiredMetricCodes { get; }
 
     public bool TryMap(
         HistoryEvent historyEvent,

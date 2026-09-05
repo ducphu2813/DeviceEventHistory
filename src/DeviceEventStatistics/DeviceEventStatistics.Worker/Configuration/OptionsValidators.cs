@@ -52,6 +52,7 @@ internal static class ConfigurationValidationErrors
     public const string LagWarningPositive = "STAT-CONFIG-LAG-WARNING-POSITIVE";
     public const string LagViolationAfterWarning = "STAT-CONFIG-LAG-VIOLATION-AFTER-WARNING";
     public const string HealthIntervalPositive = "STAT-CONFIG-HEALTH-INTERVAL-POSITIVE";
+    public const string HealthPortValid = "STAT-CONFIG-HEALTH-PORT-VALID";
     public const string TimeZoneFixed = "STAT-CONFIG-TIMEZONE-FIXED";
     public const string UtcOffsetFixed = "STAT-CONFIG-UTC-OFFSET-FIXED";
     public const string ConnectionStringRequired = "STAT-CONFIG-CONNECTION-STRING-REQUIRED";
@@ -296,6 +297,10 @@ public sealed class ObservabilityOptionsValidator(IOptions<WorkerOptions> worker
         }
 
         if (options.HealthCheckInterval <= TimeSpan.Zero) failures.Add(ConfigurationValidationErrors.HealthIntervalPositive);
+        if (options.HealthEndpointEnabled && options.HealthPort is < 1 or > 65535)
+        {
+            failures.Add(ConfigurationValidationErrors.HealthPortValid);
+        }
 
         return failures.Count == 0
             ? ValidateOptionsResult.Success

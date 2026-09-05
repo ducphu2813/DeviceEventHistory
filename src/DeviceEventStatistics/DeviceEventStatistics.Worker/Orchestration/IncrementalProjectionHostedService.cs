@@ -14,6 +14,7 @@ public sealed class IncrementalProjectionHostedService(
     ProjectionDefinitionRuntimeState runtimeDefinition,
     IOptions<WorkerOptions> workerOptions,
     IOptions<ProjectionOptions> projectionOptions,
+    TimeProvider timeProvider,
     IStatisticsTelemetry telemetry,
     GracefulShutdownCoordinator shutdownCoordinator,
     ILogger<IncrementalProjectionHostedService> logger) : BackgroundService
@@ -38,6 +39,11 @@ public sealed class IncrementalProjectionHostedService(
 
         while (!stoppingToken.IsCancellationRequested)
         {
+            if (!shutdownCoordinator.TryBeginOperation(out var acquireOperation))
+            {
+                return;
+            }
+
             LeaseAcquireResult acquired;
             try
             {
@@ -52,6 +58,10 @@ public sealed class IncrementalProjectionHostedService(
                 logger.LogError(exception, StatisticsContractConstants.Messages.MSG_LOG_PROJECTION_FAILED);
                 await DelayAsync(settings.PollInterval, stoppingToken);
                 continue;
+            }
+            finally
+            {
+                acquireOperation!.Dispose();
             }
 
             if (!acquired.Acquired || acquired.Lease is null)
@@ -130,6 +140,6 @@ public sealed class IncrementalProjectionHostedService(
         }
     }
 
-    private static async Task DelayAsync(TimeSpan delay, CancellationToken cancellationToken) =>
-        await Task.Delay(delay, cancellationToken);
+    private async Task DelayAsync(TimeSpan delay, CancellationToken cancellationToken) =>
+        await Task.Delay(delay, timeProvider, cancellationToken);
 }

@@ -60,7 +60,10 @@ public sealed class ProjectionEventOutcomeMapper(
     private static ProjectionEventOutcome Failed(HistoryEvent historyEvent, string reasonCode)
     {
         var failureId = CreateFailureId(historyEvent, reasonCode);
-        var now = historyEvent.PersistedAtUtc ?? historyEvent.ReceivedAtUtc ?? DateTimeOffset.UtcNow;
+        var now = historyEvent.PersistedAtUtc ??
+                  historyEvent.ReceivedAtUtc ??
+                  historyEvent.TimelineAtUtc ??
+                  DateTimeOffset.UnixEpoch;
         return new ProjectionEventOutcome(
             historyEvent,
             ProjectionEventDisposition.FailedTerminal,

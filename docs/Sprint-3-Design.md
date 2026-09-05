@@ -293,6 +293,13 @@ ParseStatus
 
 Không để SQL schema quyết định business mapping bằng dynamic expression. `MetricDefinition` cung cấp registry/display; mapping logic được version trong code và test.
 
+Runtime metric contract V1:
+
+- `MetricSetVersion = 1`, `MappingVersion = v1`, `OwnershipVersion = v1`.
+- 13 metric codes do mapper phát sinh được active: `tag_read`, `business_process`, `device_online_observed`, `device_connected`, `device_disconnected`, `scanner_connected`, `scanner_disconnected`, `green_light_on`, `green_light_off`, `red_light_on`, `red_light_off`, `sensor_state_observed`, `snapshot_observed`.
+- `device_error` giữ disabled vì chưa có mapper contract tương ứng.
+- Startup phải resolve đủ active registry trước khi mở readiness; duplicate logical rows hoặc sai status/version là lỗi startup.
+
 ### 7.6. `DeviceStateTransitionProjector`
 
 Xử lý ordered connection/state event:
@@ -1002,6 +1009,15 @@ Không dùng eventId/deviceId làm metric label.
 | Unhealthy | Mongo/SQL unavailable quá ngưỡng, lease lost, checkpoint không tiến triển, schema mismatch |
 
 Không có source event mới nhưng checkpoint caught-up không phải unhealthy.
+
+Statistics health exposure is split into `/health/live` and `/health/ready`.
+The live probe contains only the process liveness check. The ready probe
+contains startup contract checks and operational projection health. Pending
+request age is calculated from `RequestedAtUtc`, while retention headroom is
+calculated from `OldestPendingRequiredFromAtUtc` against the retention boundary;
+these timestamps are never substituted for one another. Manual/disabled modes
+are evaluated without requiring a projection lease. Endpoint output is
+redacted to status and check names.
 
 ## 29. Security và deployment isolation
 

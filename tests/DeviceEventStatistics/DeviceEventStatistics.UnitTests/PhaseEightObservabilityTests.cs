@@ -85,18 +85,83 @@ public sealed class PhaseEightObservabilityTests
         Assert.Equal(0, coordinator.ActiveOperations);
     }
 
+    [Fact]
+    public void Retention_headroom_uses_required_source_time_not_request_creation_time()
+    {
+        var snapshot = Snapshot(
+            sourceLatest: Now,
+            checkpoint: Now,
+            oldestPendingRequest: Now.AddDays(-30),
+            oldestRequiredFrom: Now.AddDays(-4),
+            retentionBoundary: Now.AddDays(-7));
+
+        var evaluation = new StatisticsHealthEvaluator().Evaluate(
+            new StatisticsHealthInput(true, true, false, Now, snapshot),
+            TimeSpan.FromHours(12),
+            TimeSpan.FromHours(24),
+            TimeSpan.FromDays(2));
+
+        Assert.Equal(StatisticsHealthStatus.Unhealthy, evaluation.Status);
+        Assert.Equal(StatisticsContractConstants.HealthReasons.PendingRequestAge, evaluation.Reason);
+        Assert.Equal(TimeSpan.FromDays(3), evaluation.RetentionHeadroom);
+    }
+
+    [Fact]
+    public void Required_source_before_retention_boundary_is_a_source_retention_risk()
+    {
+        var snapshot = Snapshot(
+            sourceLatest: Now,
+            checkpoint: Now,
+            oldestRequiredFrom: Now.AddDays(-8),
+            retentionBoundary: Now.AddDays(-7)) with
+        {
+            SourceOldestPersistedAtUtc = Now.AddDays(-9)
+        };
+
+        var evaluation = new StatisticsHealthEvaluator().Evaluate(
+            new StatisticsHealthInput(true, true, false, Now, snapshot),
+            TimeSpan.FromHours(12),
+            TimeSpan.FromHours(24),
+            TimeSpan.FromDays(2));
+
+        Assert.Equal(StatisticsHealthStatus.Unhealthy, evaluation.Status);
+        Assert.Equal(StatisticsContractConstants.HealthReasons.SourceRetentionRisk, evaluation.Reason);
+    }
+
+    [Fact]
+    public void Manual_mode_does_not_require_a_lease()
+    {
+        var evaluation = new StatisticsHealthEvaluator().Evaluate(
+            new StatisticsHealthInput(
+                true,
+                true,
+                false,
+                Now,
+                Snapshot(sourceLatest: Now, checkpoint: Now) with { LeaseHeld = false },
+                RequiresLease: false),
+            TimeSpan.FromHours(12),
+            TimeSpan.FromHours(24));
+
+        Assert.Equal(StatisticsHealthStatus.Healthy, evaluation.Status);
+    }
+
     private static ProjectionOperationalSnapshot Snapshot(
         DateTimeOffset? sourceLatest,
         DateTimeOffset? checkpoint,
-        bool hasUnrecoverableCoverage = false) =>
+        bool hasUnrecoverableCoverage = false,
+        DateTimeOffset? oldestPendingRequest = null,
+        DateTimeOffset? oldestRequiredFrom = null,
+        DateTimeOffset? retentionBoundary = null) =>
         new(
             sourceLatest,
             sourceLatest?.AddDays(-7),
             checkpoint,
             true,
             0,
-            null,
+            oldestPendingRequest,
             null,
             Now,
-            hasUnrecoverableCoverage);
+            hasUnrecoverableCoverage,
+            oldestRequiredFrom,
+            retentionBoundary);
 }

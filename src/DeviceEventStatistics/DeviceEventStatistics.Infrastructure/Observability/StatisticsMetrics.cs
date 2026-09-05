@@ -29,6 +29,11 @@ public sealed class StatisticsMetrics : IStatisticsTelemetry, IDisposable
     private readonly Counter<long> projectionRunsDeleted;
     private readonly Histogram<double> batchDuration;
     private readonly Histogram<double> reconciliationDuration;
+    private readonly Histogram<long> pendingRequestCount;
+    private readonly Histogram<long> coverageGapCount;
+    private readonly Histogram<double> auditCursorAge;
+    private readonly Histogram<double> retentionHeadroom;
+    private readonly Counter<long> healthEvaluations;
 
     public StatisticsMetrics()
     {
@@ -49,6 +54,11 @@ public sealed class StatisticsMetrics : IStatisticsTelemetry, IDisposable
         projectionRunsDeleted = meter.CreateCounter<long>("statistics.cleanup.projection_runs_deleted");
         batchDuration = meter.CreateHistogram<double>("statistics.batch.duration", "ms");
         reconciliationDuration = meter.CreateHistogram<double>("statistics.reconciliation.duration", "ms");
+        pendingRequestCount = meter.CreateHistogram<long>("statistics.reconciliation.pending_requests", "requests");
+        coverageGapCount = meter.CreateHistogram<long>("statistics.coverage.gaps", "gaps");
+        auditCursorAge = meter.CreateHistogram<double>("statistics.audit.cursor_age", "ms");
+        retentionHeadroom = meter.CreateHistogram<double>("statistics.retention.headroom", "ms");
+        healthEvaluations = meter.CreateCounter<long>("statistics.health.evaluations");
     }
 
     public void RecordBatchCommitted(string mode, ProjectionPageResult result, TimeSpan duration)
@@ -87,6 +97,31 @@ public sealed class StatisticsMetrics : IStatisticsTelemetry, IDisposable
     {
         stagingRowsDeleted.Add(deletedStagingRows);
         projectionRunsDeleted.Add(deletedProjectionRuns);
+    }
+
+    public void RecordHealthSnapshot(
+        ProjectionOperationalSnapshot snapshot,
+        StatisticsHealthEvaluation evaluation)
+    {
+        pendingRequestCount.Record(snapshot.PendingRequestCount);
+        coverageGapCount.Record(snapshot.CoverageGapCount);
+        if (evaluation.AuditCursorAge is TimeSpan auditAge)
+        {
+            auditCursorAge.Record(auditAge.TotalMilliseconds);
+        }
+
+        if (evaluation.RetentionHeadroom is TimeSpan headroom)
+        {
+            retentionHeadroom.Record(headroom.TotalMilliseconds);
+        }
+
+        healthEvaluations.Add(
+            1,
+            new TagList
+            {
+                { "status", evaluation.Status.ToString().ToLowerInvariant() },
+                { "reason", evaluation.Reason }
+            });
     }
 
     public void Dispose() => meter.Dispose();

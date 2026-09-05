@@ -94,20 +94,13 @@ public sealed class IncrementalProjectionHandler(
             .Select(metric => metric.MetricCode)
             .Distinct(StringComparer.Ordinal)
             .ToArray();
-        var metricKeys = await metricKeyResolver.ResolveAsync(
-            options.MetricSetVersion,
+        var metricRegistry = await metricKeyResolver.ResolveRegistryAsync(
+            new MetricRegistryIdentity(
+                options.MetricSetVersion,
+                options.MappingVersion,
+                EventOwnershipPolicy.Version),
             metricCodes,
             cancellationToken);
-        var missingMetricCodes = metricCodes
-            .Where(metricCode => !metricKeys.ContainsKey(metricCode))
-            .ToArray();
-        if (missingMetricCodes.Length > 0)
-        {
-            throw new InvalidOperationException(
-                StatisticsContractConstants.Messages.Format(
-                    StatisticsContractConstants.Messages.MSG_PROJECTION_METRIC_KEY_MISSING,
-                    string.Join(',', missingMetricCodes)));
-        }
 
         var processedEvents = outcomes
             .Where(outcome => outcome.Event.EventId is string eventId &&
@@ -135,7 +128,7 @@ public sealed class IncrementalProjectionHandler(
                 metric.CompanyId,
                 metric.DeviceId,
                 metric.StatisticsDate,
-                metricKeys[metric.MetricCode],
+                metricRegistry[metric.MetricCode],
                 metric.SourceKind,
                 metric.TimelineAtUtc,
                 metric.SourcePersistedAtUtc,

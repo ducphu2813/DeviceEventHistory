@@ -151,7 +151,7 @@ public sealed class StatisticsProjectionPolicyTests
             TimeSpan.FromMinutes(5),
             TimeSpan.FromSeconds(30));
         var pageCursor = new SourceCursor(DateTimeOffset.UnixEpoch.AddHours(1), new string('b', 64));
-        var next = sweep.ApplyPage(checkpoint, pageCursor, 500, pageIsComplete: false);
+        var next = sweep.ApplyPage(checkpoint, pageCursor, 500, pageIsComplete: false, now);
 
         Assert.Equal(now.AddSeconds(-30), sweep.ToAtUtc);
         Assert.Equal(pageCursor.EventId, next.SweepLastEventId);

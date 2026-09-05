@@ -26,7 +26,7 @@ public sealed class DurationRefreshHostedService(
             return;
         }
 
-        using var timer = new PeriodicTimer(stateOptions.Value.RefreshInterval);
+        using var timer = new PeriodicTimer(stateOptions.Value.RefreshInterval, timeProvider);
         while (await timer.WaitForNextTickAsync(stoppingToken))
         {
             var lease = leaseCoordinator.CurrentLease;

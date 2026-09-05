@@ -202,6 +202,8 @@ IX_DeviceDimension_Company_Gate
 
 Registry cho canonical statistics metric. Mapping logic nằm trong versioned application code; table cung cấp stable key, display metadata, grouping và health eligibility.
 
+Contract V1 của worker dùng `MetricSetVersion = 1`, `MappingVersion = 'v1'` và `OwnershipVersion = 'v1'`. Chỉ 13 metric code được mapper phát sinh là active; `device_error` vẫn disabled cho tới khi có mapping contract. Resolver phải kiểm tra enabled/version và reject duplicate logical rows trước khi worker xử lý history.
+
 ```sql
 CREATE TABLE [dbo].[DES.MetricDefinition]
 (

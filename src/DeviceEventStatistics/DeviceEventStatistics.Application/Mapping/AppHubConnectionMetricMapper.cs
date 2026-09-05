@@ -13,6 +13,9 @@ public sealed class AppHubConnectionMetricMapper : IDeviceMetricMapper
         MetricMapperKeyExtensions.CreateKey("erp_apphub", "scanner_connection", "receiveDeviceScanDisconnect", "connection")
     ];
 
+    public IReadOnlyCollection<string> MetricCodes { get; } =
+        ["device_connected", "device_disconnected", "scanner_connected", "scanner_disconnected"];
+
     public IReadOnlyList<MetricContributionDraft> Map(HistoryEvent historyEvent, StatisticsBucket bucket)
     {
         var metricCode = historyEvent.Category == "device_connection"

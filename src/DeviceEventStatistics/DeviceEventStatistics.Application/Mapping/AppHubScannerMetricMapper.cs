@@ -8,6 +8,8 @@ public sealed class AppHubScannerMetricMapper : IDeviceMetricMapper
     public IReadOnlyCollection<string> Keys { get; } =
     [MetricMapperKeyExtensions.CreateKey("erp_apphub", "device_snapshot", "receiveRequestDeviceScanInfoOnline", "connection")];
 
+    public IReadOnlyCollection<string> MetricCodes { get; } = ["snapshot_observed"];
+
     public IReadOnlyList<MetricContributionDraft> Map(HistoryEvent historyEvent, StatisticsBucket bucket) =>
         historyEvent.Facts.Connection is null
             ? []

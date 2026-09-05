@@ -7,6 +7,8 @@ public interface IDeviceMetricMapper
 {
     IReadOnlyCollection<string> Keys { get; }
 
+    IReadOnlyCollection<string> MetricCodes { get; }
+
     IReadOnlyList<MetricContributionDraft> Map(
         HistoryEvent historyEvent,
         StatisticsBucket bucket);
@@ -18,6 +20,18 @@ public interface IMetricKeyResolver
         int metricSetVersion,
         IReadOnlyCollection<string> metricCodes,
         CancellationToken cancellationToken = default);
+
+    async Task<ResolvedMetricRegistry> ResolveRegistryAsync(
+        MetricRegistryIdentity identity,
+        IReadOnlyCollection<string> metricCodes,
+        CancellationToken cancellationToken = default)
+    {
+        var metricKeys = await ResolveAsync(
+            identity.MetricSetVersion,
+            metricCodes,
+            cancellationToken);
+        return new(identity, metricKeys);
+    }
 }
 
 public static class MetricMapperKey

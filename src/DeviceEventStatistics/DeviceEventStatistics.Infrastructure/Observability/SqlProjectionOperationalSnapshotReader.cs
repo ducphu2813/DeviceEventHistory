@@ -12,9 +12,16 @@ public sealed class SqlProjectionOperationalSnapshotReader(
     MongoHistoryDbContext mongoContext,
     SqlStatisticsDatabaseOptions sqlOptions) : IProjectionOperationalSnapshotReader
 {
+    public Task<ProjectionOperationalSnapshot> ReadAsync(
+        ProjectionIdentity identity,
+        string owner,
+        CancellationToken cancellationToken = default) =>
+        ReadAsync(identity, owner, null, cancellationToken);
+
     public async Task<ProjectionOperationalSnapshot> ReadAsync(
         ProjectionIdentity identity,
         string owner,
+        DateTimeOffset? retentionBoundaryAtUtc = null,
         CancellationToken cancellationToken = default)
     {
         var bounds = await mongoContext.ReadPersistedBoundsAsync(cancellationToken);
@@ -25,18 +32,25 @@ public sealed class SqlProjectionOperationalSnapshotReader(
         command.CommandText = $"""
             SELECT
                 [projection_checkpoint].[LastPersistedAtUtc],
+                [projection_checkpoint].[AuditStartedAtUtc],
+                [projection_checkpoint].[AuditCompletedAtUtc],
                 CASE WHEN [projection_checkpoint].[LeaseOwner] = @owner
                           AND [projection_checkpoint].[LeaseExpiresAtUtc] > SYSUTCDATETIME()
                      THEN CONVERT(bit, 1) ELSE CONVERT(bit, 0) END,
                 pending.[PendingCount],
                 pending.[OldestRequestedAtUtc],
+                pending.[OldestRequiredFromAtUtc],
                 state_daily.[LastCalculatedAtUtc],
                 successful_run.[LastSuccessfulRunAtUtc],
-                coverage.[UnrecoverableCount]
+                coverage.[UnrecoverableCount],
+                coverage.[GapCount]
             FROM {Table("ProjectionCheckpoint")} AS [projection_checkpoint]
             OUTER APPLY
             (
-                SELECT COUNT_BIG(*) AS [PendingCount], MIN([RequestedAtUtc]) AS [OldestRequestedAtUtc]
+                SELECT
+                    COUNT_BIG(*) AS [PendingCount],
+                    MIN([RequestedAtUtc]) AS [OldestRequestedAtUtc],
+                    MIN(CONVERT(datetime2(7), [FromStatisticsDate])) AS [OldestRequiredFromAtUtc]
                 FROM {Table("ReconciliationRequest")}
                 WHERE [ProjectionName] = @projectionName
                   AND [ProjectionVersion] = @projectionVersion
@@ -58,7 +72,9 @@ public sealed class SqlProjectionOperationalSnapshotReader(
             ) AS successful_run
             OUTER APPLY
             (
-                SELECT COUNT_BIG(*) AS [UnrecoverableCount]
+                SELECT
+                    COUNT_BIG(CASE WHEN [CoverageStatus] = 'unrecoverable' THEN 1 END) AS [UnrecoverableCount],
+                    COUNT_BIG(CASE WHEN [CoverageStatus] IN ('partial', 'unrecoverable') THEN 1 END) AS [GapCount]
                 FROM {Table("ProjectionCoverage")}
                 WHERE [ProjectionName] = @projectionName
                   AND [ProjectionVersion] = @projectionVersion
@@ -85,19 +101,26 @@ public sealed class SqlProjectionOperationalSnapshotReader(
                 null,
                 null,
                 null,
-                false);
+                false,
+                null,
+                retentionBoundaryAtUtc);
         }
 
         return new ProjectionOperationalSnapshot(
             bounds.LatestPersistedAtUtc,
             bounds.OldestPersistedAtUtc,
             ReadDateTimeOffset(reader, 0),
-            reader.GetBoolean(1),
-            checked((int)reader.GetInt64(2)),
-            ReadDateTimeOffset(reader, 3),
-            ReadDateTimeOffset(reader, 4),
+            reader.GetBoolean(3),
+            checked((int)reader.GetInt64(4)),
             ReadDateTimeOffset(reader, 5),
-            !reader.IsDBNull(6) && reader.GetInt64(6) > 0);
+            ReadDateTimeOffset(reader, 7),
+            ReadDateTimeOffset(reader, 8),
+            !reader.IsDBNull(9) && reader.GetInt64(9) > 0,
+            ReadDateTimeOffset(reader, 6),
+            retentionBoundaryAtUtc,
+            ReadDateTimeOffset(reader, 1),
+            ReadDateTimeOffset(reader, 2),
+            reader.IsDBNull(10) ? 0 : checked((int)reader.GetInt64(10)));
     }
 
     private string Table(string tableName) =>

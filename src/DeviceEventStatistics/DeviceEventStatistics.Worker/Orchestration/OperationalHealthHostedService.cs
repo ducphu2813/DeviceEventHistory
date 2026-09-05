@@ -15,9 +15,11 @@ public sealed class OperationalHealthHostedService(
     StartupReadinessState readinessState,
     IOptions<WorkerOptions> workerOptions,
     IOptions<ProjectionOptions> projectionOptions,
+    IOptions<RetentionOptions> retentionOptions,
     IOptions<ObservabilityOptions> observabilityOptions,
     TimeProvider timeProvider,
     GracefulShutdownCoordinator shutdownCoordinator,
+    IStatisticsTelemetry telemetry,
     ILogger<OperationalHealthHostedService> logger) : BackgroundService
 {
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -28,7 +30,7 @@ public sealed class OperationalHealthHostedService(
             return;
         }
 
-        using var timer = new PeriodicTimer(observabilityOptions.Value.HealthCheckInterval);
+        using var timer = new PeriodicTimer(observabilityOptions.Value.HealthCheckInterval, timeProvider);
         do
         {
             await EvaluateAsync(stoppingToken);
@@ -41,6 +43,7 @@ public sealed class OperationalHealthHostedService(
         try
         {
             var settings = projectionOptions.Value;
+            var nowUtc = timeProvider.GetUtcNow();
             var identity = new ProjectionIdentity(
                 settings.Name,
                 settings.ProjectionVersion,
@@ -48,16 +51,21 @@ public sealed class OperationalHealthHostedService(
             var snapshot = await snapshotReader.ReadAsync(
                 identity,
                 workerOptions.Value.WorkerId,
+                nowUtc - TimeSpan.FromDays(retentionOptions.Value.MongoHistoryRetentionDays),
                 cancellationToken);
+            var requiresLease = settings.Mode is ProjectionMode.Incremental or ProjectionMode.Reconciliation;
             var evaluation = evaluator.Evaluate(
                 new StatisticsHealthInput(
                     readinessState.IsReady,
                     true,
                     shutdownCoordinator.IsDraining,
-                    timeProvider.GetUtcNow(),
-                    snapshot),
+                    nowUtc,
+                    snapshot,
+                    requiresLease),
                 observabilityOptions.Value.LagWarningAfter,
-                observabilityOptions.Value.LagViolationAfter);
+                observabilityOptions.Value.LagViolationAfter,
+                TimeSpan.FromDays(retentionOptions.Value.MinimumHistoryHeadroomDays));
+            telemetry.RecordHealthSnapshot(snapshot, evaluation);
             var previous = healthState.Evaluation;
             healthState.Set(evaluation);
             if (previous?.Status != evaluation.Status ||

@@ -760,20 +760,20 @@ SELECT
 FROM
 (
     VALUES
-        (1, 1, 'tag_read', 'Tag read', 'activity', 'count', 'tag', 'rfid_antenna_file', 0, 0, 'v1', 'v1'),
-        (2, 1, 'business_process', 'Business process', 'business', 'count', 'business', 'rfid_antenna_file', 0, 0, 'v1', 'v1'),
-        (3, 1, 'device_online_observed', 'Device online observed', 'connection', 'count', 'connection', 'erp_apphub', 1, 0, 'v1', 'v1'),
-        (4, 1, 'device_connected', 'Device connected', 'connection', 'count', 'connection', 'erp_apphub', 1, 0, 'v1', 'v1'),
-        (5, 1, 'device_disconnected', 'Device disconnected', 'connection', 'count', 'connection', 'erp_apphub', 1, 0, 'v1', 'v1'),
-        (6, 1, 'scanner_connected', 'Scanner connected', 'scanner', 'count', 'scanner', 'erp_apphub', 1, 0, 'v1', 'v1'),
-        (7, 1, 'scanner_disconnected', 'Scanner disconnected', 'scanner', 'count', 'scanner', 'erp_apphub', 1, 0, 'v1', 'v1'),
-        (8, 1, 'green_light_on', 'Green light on', 'control', 'count', 'control', 'erp_apphub', 0, 0, 'v1', 'v1'),
-        (9, 1, 'green_light_off', 'Green light off', 'control', 'count', 'control', 'erp_apphub', 0, 0, 'v1', 'v1'),
-        (10, 1, 'red_light_on', 'Red light on', 'control', 'count', 'control', 'erp_apphub', 0, 0, 'v1', 'v1'),
-        (11, 1, 'red_light_off', 'Red light off', 'control', 'count', 'control', 'erp_apphub', 0, 0, 'v1', 'v1'),
-        (12, 1, 'sensor_state_observed', 'Sensor state observed', 'sensor', 'count', 'sensor', 'erp_apphub', 0, 0, 'v1', 'v1'),
+        (1, 1, 'tag_read', 'Tag read', 'activity', 'count', 'tag', 'rfid_antenna_file', 0, 1, 'v1', 'v1'),
+        (2, 1, 'business_process', 'Business process', 'business', 'count', 'business', 'rfid_antenna_file', 0, 1, 'v1', 'v1'),
+        (3, 1, 'device_online_observed', 'Device online observed', 'connection', 'count', 'connection', 'erp_apphub', 1, 1, 'v1', 'v1'),
+        (4, 1, 'device_connected', 'Device connected', 'connection', 'count', 'connection', 'erp_apphub', 1, 1, 'v1', 'v1'),
+        (5, 1, 'device_disconnected', 'Device disconnected', 'connection', 'count', 'connection', 'erp_apphub', 1, 1, 'v1', 'v1'),
+        (6, 1, 'scanner_connected', 'Scanner connected', 'scanner', 'count', 'scanner', 'erp_apphub', 1, 1, 'v1', 'v1'),
+        (7, 1, 'scanner_disconnected', 'Scanner disconnected', 'scanner', 'count', 'scanner', 'erp_apphub', 1, 1, 'v1', 'v1'),
+        (8, 1, 'green_light_on', 'Green light on', 'control', 'count', 'control', 'erp_apphub', 0, 1, 'v1', 'v1'),
+        (9, 1, 'green_light_off', 'Green light off', 'control', 'count', 'control', 'erp_apphub', 0, 1, 'v1', 'v1'),
+        (10, 1, 'red_light_on', 'Red light on', 'control', 'count', 'control', 'erp_apphub', 0, 1, 'v1', 'v1'),
+        (11, 1, 'red_light_off', 'Red light off', 'control', 'count', 'control', 'erp_apphub', 0, 1, 'v1', 'v1'),
+        (12, 1, 'sensor_state_observed', 'Sensor state observed', 'sensor', 'count', 'sensor', 'erp_apphub', 0, 1, 'v1', 'v1'),
         (13, 1, 'device_error', 'Device error', 'error', 'count', 'error', 'erp_apphub', 0, 0, 'v1', 'v1'),
-        (14, 1, 'snapshot_observed', 'Snapshot observed', 'connection', 'count', 'snapshot', 'erp_apphub', 0, 0, 'v1', 'v1')
+        (14, 1, 'snapshot_observed', 'Snapshot observed', 'connection', 'count', 'snapshot', 'erp_apphub', 0, 1, 'v1', 'v1')
 ) AS seed
 (
     [MetricKey], [MetricSetVersion], [MetricCode], [DisplayName], [MetricGroup], [Unit],

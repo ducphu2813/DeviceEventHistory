@@ -46,7 +46,7 @@ public sealed class ReconciliationHostedService(
             ["Mode"] = projectionOptions.Value.Mode.ToString()
         });
 
-        using var timer = new PeriodicTimer(reconciliationOptions.Value.ScheduleInterval);
+        using var timer = new PeriodicTimer(reconciliationOptions.Value.ScheduleInterval, timeProvider);
         do
         {
             await RunCycleAsync(stoppingToken);

@@ -21,6 +21,10 @@ public interface IStatisticsTelemetry
         TimeSpan duration);
 
     void RecordOperationalCleanup(int deletedStagingRows, int deletedProjectionRuns);
+
+    void RecordHealthSnapshot(
+        ProjectionOperationalSnapshot snapshot,
+        StatisticsHealthEvaluation evaluation);
 }
 
 public sealed class NullStatisticsTelemetry : IStatisticsTelemetry
@@ -44,6 +48,12 @@ public sealed class NullStatisticsTelemetry : IStatisticsTelemetry
     public void RecordOperationalCleanup(int deletedStagingRows, int deletedProjectionRuns)
     {
     }
+
+    public void RecordHealthSnapshot(
+        ProjectionOperationalSnapshot snapshot,
+        StatisticsHealthEvaluation evaluation)
+    {
+    }
 }
 
 public sealed record ProjectionOperationalSnapshot(
@@ -55,7 +65,12 @@ public sealed record ProjectionOperationalSnapshot(
     DateTimeOffset? OldestPendingRequestAtUtc,
     DateTimeOffset? LastDurationRefreshAtUtc,
     DateTimeOffset? LastSuccessfulRunAtUtc,
-    bool HasUnrecoverableCoverage);
+    bool HasUnrecoverableCoverage,
+    DateTimeOffset? OldestPendingRequiredFromAtUtc = null,
+    DateTimeOffset? RetentionBoundaryAtUtc = null,
+    DateTimeOffset? AuditStartedAtUtc = null,
+    DateTimeOffset? AuditCompletedAtUtc = null,
+    int CoverageGapCount = 0);
 
 public interface IProjectionOperationalSnapshotReader
 {
@@ -63,6 +78,13 @@ public interface IProjectionOperationalSnapshotReader
         ProjectionIdentity identity,
         string owner,
         CancellationToken cancellationToken = default);
+
+    Task<ProjectionOperationalSnapshot> ReadAsync(
+        ProjectionIdentity identity,
+        string owner,
+        DateTimeOffset? retentionBoundaryAtUtc,
+        CancellationToken cancellationToken = default) =>
+        ReadAsync(identity, owner, cancellationToken);
 }
 
 public enum StatisticsHealthStatus
@@ -77,64 +99,87 @@ public sealed record StatisticsHealthEvaluation(
     string Reason,
     TimeSpan? IncrementalLag,
     TimeSpan? PendingRequestAge,
-    TimeSpan? RetentionHeadroom);
+    TimeSpan? RetentionHeadroom,
+    int PendingRequestCount = 0,
+    int CoverageGapCount = 0,
+    TimeSpan? AuditCursorAge = null);
 
 public sealed record StatisticsHealthInput(
     bool StartupReady,
     bool DependenciesAvailable,
     bool IsDraining,
     DateTimeOffset NowUtc,
-    ProjectionOperationalSnapshot OperationalSnapshot);
+    ProjectionOperationalSnapshot OperationalSnapshot,
+    bool RequiresLease = true);
 
 public sealed class StatisticsHealthEvaluator
 {
     public StatisticsHealthEvaluation Evaluate(
         StatisticsHealthInput input,
         TimeSpan lagWarningAfter,
-        TimeSpan lagViolationAfter)
+        TimeSpan lagViolationAfter,
+        TimeSpan minimumHistoryHeadroom = default)
     {
         var snapshot = input.OperationalSnapshot;
         var lag = CalculateLag(
             snapshot.SourceLatestPersistedAtUtc,
             snapshot.CheckpointLastPersistedAtUtc);
-        var pendingAge = input.NowUtc - snapshot.OldestPendingRequestAtUtc;
+        var pendingAge = CalculateAge(input.NowUtc, snapshot.OldestPendingRequestAtUtc);
         var retentionHeadroom = CalculateRetentionHeadroom(
+            snapshot.OldestPendingRequiredFromAtUtc,
+            snapshot.RetentionBoundaryAtUtc);
+        var unrecoverableCoverage = snapshot.HasUnrecoverableCoverage ||
+            IsSourceCoverageMissing(
+                snapshot.SourceOldestPersistedAtUtc,
+                snapshot.OldestPendingRequiredFromAtUtc);
+        var sourceRetentionRisk = retentionHeadroom is TimeSpan headroom && headroom < TimeSpan.Zero;
+        var auditCursorAge = CalculateAge(
             input.NowUtc,
-            snapshot.SourceOldestPersistedAtUtc,
-            snapshot.OldestPendingRequestAtUtc);
+            snapshot.AuditCompletedAtUtc ?? snapshot.AuditStartedAtUtc);
 
         if (!input.StartupReady || !input.DependenciesAvailable)
         {
-            return Evaluation(StatisticsHealthStatus.Unhealthy, StatisticsContractConstants.HealthReasons.StartupOrDependencyFailure, lag, pendingAge, retentionHeadroom);
+            return Evaluation(StatisticsHealthStatus.Unhealthy, StatisticsContractConstants.HealthReasons.StartupOrDependencyFailure, lag, pendingAge, retentionHeadroom, snapshot, auditCursorAge);
         }
 
         if (input.IsDraining)
         {
-            return Evaluation(StatisticsHealthStatus.Degraded, StatisticsContractConstants.HealthReasons.Draining, lag, pendingAge, retentionHeadroom);
+            return Evaluation(StatisticsHealthStatus.Degraded, StatisticsContractConstants.HealthReasons.Draining, lag, pendingAge, retentionHeadroom, snapshot, auditCursorAge);
         }
 
-        if (!snapshot.LeaseHeld)
+        if (input.RequiresLease && !snapshot.LeaseHeld)
         {
-            return Evaluation(StatisticsHealthStatus.Unhealthy, StatisticsContractConstants.HealthReasons.LeaseNotHeld, lag, pendingAge, retentionHeadroom);
+            return Evaluation(StatisticsHealthStatus.Unhealthy, StatisticsContractConstants.HealthReasons.LeaseNotHeld, lag, pendingAge, retentionHeadroom, snapshot, auditCursorAge);
         }
 
-        if (snapshot.HasUnrecoverableCoverage)
+        if (unrecoverableCoverage)
         {
-            return Evaluation(StatisticsHealthStatus.Unhealthy, StatisticsContractConstants.HealthReasons.UnrecoverableCoverage, lag, pendingAge, retentionHeadroom);
+            return Evaluation(StatisticsHealthStatus.Unhealthy, StatisticsContractConstants.HealthReasons.UnrecoverableCoverage, lag, pendingAge, retentionHeadroom, snapshot, auditCursorAge);
         }
 
-        if (IsAtOrAbove(lag, lagViolationAfter) || IsAtOrAbove(pendingAge, lagViolationAfter))
+        if (sourceRetentionRisk)
         {
-            return Evaluation(StatisticsHealthStatus.Unhealthy, StatisticsContractConstants.HealthReasons.LagSloBreached, lag, pendingAge, retentionHeadroom);
+            return Evaluation(StatisticsHealthStatus.Unhealthy, StatisticsContractConstants.HealthReasons.SourceRetentionRisk, lag, pendingAge, retentionHeadroom, snapshot, auditCursorAge);
         }
 
-        if (IsAtOrAbove(lag, lagWarningAfter) || IsAtOrAbove(pendingAge, lagWarningAfter) ||
-            retentionHeadroom is not null && retentionHeadroom <= TimeSpan.Zero)
+        if (IsAtOrAbove(lag, lagViolationAfter))
         {
-            return Evaluation(StatisticsHealthStatus.Degraded, StatisticsContractConstants.HealthReasons.LagOrRetentionWarning, lag, pendingAge, retentionHeadroom);
+            return Evaluation(StatisticsHealthStatus.Unhealthy, StatisticsContractConstants.HealthReasons.LagSloBreached, lag, pendingAge, retentionHeadroom, snapshot, auditCursorAge);
         }
 
-        return Evaluation(StatisticsHealthStatus.Healthy, StatisticsContractConstants.HealthReasons.CaughtUp, lag, pendingAge, retentionHeadroom);
+        if (IsAtOrAbove(pendingAge, lagViolationAfter))
+        {
+            return Evaluation(StatisticsHealthStatus.Unhealthy, StatisticsContractConstants.HealthReasons.PendingRequestAge, lag, pendingAge, retentionHeadroom, snapshot, auditCursorAge);
+        }
+
+        if (IsAtOrAbove(lag, lagWarningAfter) ||
+            IsAtOrAbove(pendingAge, lagWarningAfter) ||
+            IsAtOrBelow(retentionHeadroom, minimumHistoryHeadroom))
+        {
+            return Evaluation(StatisticsHealthStatus.Degraded, StatisticsContractConstants.HealthReasons.LagOrRetentionWarning, lag, pendingAge, retentionHeadroom, snapshot, auditCursorAge);
+        }
+
+        return Evaluation(StatisticsHealthStatus.Healthy, StatisticsContractConstants.HealthReasons.CaughtUp, lag, pendingAge, retentionHeadroom, snapshot, auditCursorAge);
     }
 
     private static TimeSpan? CalculateLag(
@@ -156,28 +201,46 @@ public sealed class StatisticsHealthEvaluator
             : TimeSpan.Zero;
     }
 
-    private static TimeSpan? CalculateRetentionHeadroom(
+    private static TimeSpan? CalculateAge(
         DateTimeOffset nowUtc,
-        DateTimeOffset? sourceOldestPersistedAtUtc,
-        DateTimeOffset? oldestPendingRequestAtUtc)
+        DateTimeOffset? atUtc) =>
+        atUtc is DateTimeOffset value
+            ? nowUtc > value ? nowUtc - value : TimeSpan.Zero
+            : null;
+
+    private static TimeSpan? CalculateRetentionHeadroom(
+        DateTimeOffset? oldestPendingRequiredFromAtUtc,
+        DateTimeOffset? retentionBoundaryAtUtc)
     {
-        if (sourceOldestPersistedAtUtc is not DateTimeOffset sourceOldest ||
-            oldestPendingRequestAtUtc is not DateTimeOffset pending)
+        if (oldestPendingRequiredFromAtUtc is not DateTimeOffset required ||
+            retentionBoundaryAtUtc is not DateTimeOffset boundary)
         {
             return null;
         }
 
-        return sourceOldest - pending;
+        return required - boundary;
     }
+
+    private static bool IsSourceCoverageMissing(
+        DateTimeOffset? sourceOldestPersistedAtUtc,
+        DateTimeOffset? oldestPendingRequiredFromAtUtc) =>
+        sourceOldestPersistedAtUtc is DateTimeOffset sourceOldest &&
+        oldestPendingRequiredFromAtUtc is DateTimeOffset required &&
+        sourceOldest > required;
 
     private static bool IsAtOrAbove(TimeSpan? value, TimeSpan threshold) =>
         value is TimeSpan actual && actual >= threshold;
+
+    private static bool IsAtOrBelow(TimeSpan? value, TimeSpan threshold) =>
+        value is TimeSpan actual && actual <= threshold;
 
     private static StatisticsHealthEvaluation Evaluation(
         StatisticsHealthStatus status,
         string reason,
         TimeSpan? lag,
         TimeSpan? pendingAge,
-        TimeSpan? retentionHeadroom) =>
-        new(status, reason, lag, pendingAge, retentionHeadroom);
+        TimeSpan? retentionHeadroom,
+        ProjectionOperationalSnapshot snapshot,
+        TimeSpan? auditCursorAge) =>
+        new(status, reason, lag, pendingAge, retentionHeadroom, snapshot.PendingRequestCount, snapshot.CoverageGapCount, auditCursorAge);
 }

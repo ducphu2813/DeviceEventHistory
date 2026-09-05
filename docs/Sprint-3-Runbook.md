@@ -9,8 +9,9 @@
    without modifying legacy tables. Use it for a fresh create-only bootstrap,
    not as an in-place schema upgrade.
 3. For an existing 009 database, run the migration runner to apply
-   `010_AddDurableAuditCheckpoint.sql` and
-   `011_AddScopedProcessedEventContract.sql`. They add durable audit fields
+   `010_AddDurableAuditCheckpoint.sql`,
+   `011_AddScopedProcessedEventContract.sql`, and
+   `012_FixMetricRegistryV1.sql`. They add durable audit fields
    plus nullable `ProcessedEvent` device scope and TVP V2; no existing
    processed rows are rewritten.
 4. Verify the latest schema through the worker startup preflight.
@@ -36,6 +37,14 @@ device from deleting another device's quality aggregate.
 The worker never creates SQL schema or changes the History Worker checkpoint.
 Connection strings and credentials must be supplied through local environment
 configuration or deployment secrets.
+
+When `HealthEndpointEnabled=true`, external monitors can probe
+`http://<worker-host>:<HealthPort>/health/live` and `/health/ready`.
+Liveness contains only the process check; readiness contains startup and
+operational checks. Responses expose status and check names only, never
+connection strings, exception details or tenant identifiers. Disabled/manual
+completed modes do not require an active projection lease for operational
+health.
 
 ## Phase 8 operational signals
 

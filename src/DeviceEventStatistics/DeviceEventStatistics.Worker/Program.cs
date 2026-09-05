@@ -3,9 +3,18 @@ using DeviceEventStatistics.Domain.Common;
 using DeviceEventStatistics.Worker.Configuration;
 using DeviceEventStatistics.Worker.HostedServices;
 using DeviceEventStatistics.Worker.Orchestration;
+using DeviceEventStatistics.Worker.HealthChecks;
+using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Diagnostics.HealthChecks;
+using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.Options;
 
-var builder = Host.CreateApplicationBuilder(args);
+var builder = WebApplication.CreateBuilder(args);
+var healthSection = builder.Configuration.GetSection(ObservabilityOptions.SectionName);
+if (healthSection.GetValue(nameof(ObservabilityOptions.HealthEndpointEnabled), true))
+{
+    builder.WebHost.UseUrls($"http://0.0.0.0:{healthSection.GetValue(nameof(ObservabilityOptions.HealthPort), 8080)}");
+}
 builder.Services.AddDeviceEventStatisticsConfiguration(builder.Configuration);
 builder.Services.AddDeviceEventStatisticsInfrastructure();
 builder.Services.AddDeviceEventStatisticsObservability();
@@ -48,4 +57,23 @@ logger.LogInformation(
     summary.CompanyIds.Count,
     summary.DeviceIds.Count);
 
-host.Run();
+var observabilityOptions = host.Services.GetRequiredService<IOptions<ObservabilityOptions>>().Value;
+if (observabilityOptions.HealthEndpointEnabled)
+{
+    host.MapHealthChecks(
+        "/health/live",
+        new HealthCheckOptions
+        {
+            Predicate = registration => registration.Tags.Contains("live", StringComparer.Ordinal),
+            ResponseWriter = HealthEndpointResponseWriter.WriteAsync
+        });
+    host.MapHealthChecks(
+        "/health/ready",
+        new HealthCheckOptions
+        {
+            Predicate = registration => registration.Tags.Contains("ready", StringComparer.Ordinal),
+            ResponseWriter = HealthEndpointResponseWriter.WriteAsync
+        });
+}
+
+await host.RunAsync();

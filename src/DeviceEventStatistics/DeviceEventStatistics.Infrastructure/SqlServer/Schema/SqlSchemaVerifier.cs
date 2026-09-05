@@ -8,7 +8,7 @@ public sealed class SqlSchemaVerifier(
     SqlStatisticsDbContext dbContext,
     SqlStatisticsDatabaseOptions options)
 {
-    public const string ExpectedLatestMigrationId = "011_AddScopedProcessedEventContract";
+    public const string ExpectedLatestMigrationId = "012_FixMetricRegistryV1";
 
     private static readonly string[] RequiredProcessedEventColumns =
     [

@@ -33,7 +33,7 @@ public sealed record ProjectionSweep(
         SourceCursor? lastPageCursor,
         int pageSize,
         bool pageIsComplete,
-        DateTimeOffset? processedAtUtc = null)
+        DateTimeOffset processedAtUtc)
     {
         if (!pageIsComplete)
         {
@@ -48,18 +48,17 @@ public sealed record ProjectionSweep(
         }
 
         var highWatermark = GetMaximumCursor(checkpoint, lastPageCursor);
-        var completedAtUtc = processedAtUtc ?? DateTimeOffset.UtcNow;
         return checkpoint with
         {
             LastPersistedAtUtc = highWatermark?.PersistedAtUtc,
             LastEventId = highWatermark?.EventId,
-            LastProcessedAtUtc = completedAtUtc,
+            LastProcessedAtUtc = processedAtUtc,
             LastBatchSize = pageSize,
             SweepFromAtUtc = null,
             SweepToAtUtc = null,
             SweepLastPersistedAtUtc = null,
             SweepLastEventId = null,
-            LastCompletedSweepAtUtc = completedAtUtc
+            LastCompletedSweepAtUtc = processedAtUtc
         };
     }
 

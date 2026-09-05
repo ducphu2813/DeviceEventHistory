@@ -63,18 +63,13 @@ public sealed class ExactRangeRebuilder(
             .Select(value => value.MetricCode)
             .Distinct(StringComparer.Ordinal)
             .ToArray();
-        var metricKeys = await metricKeyResolver.ResolveAsync(
-            options.MetricSetVersion,
+        var metricRegistry = await metricKeyResolver.ResolveRegistryAsync(
+            new MetricRegistryIdentity(
+                options.MetricSetVersion,
+                options.MappingVersion,
+                EventOwnershipPolicy.Version),
             metricCodes,
             cancellationToken);
-        var missingMetricCodes = metricCodes.Where(value => !metricKeys.ContainsKey(value)).ToArray();
-        if (missingMetricCodes.Length > 0)
-        {
-            throw new InvalidOperationException(
-                StatisticsContractConstants.Messages.Format(
-                    StatisticsContractConstants.Messages.MSG_PROJECTION_METRIC_KEY_MISSING,
-                    string.Join(',', missingMetricCodes)));
-        }
 
         var metrics = targetOutcomes
             .SelectMany(value => value.Metrics)
@@ -83,7 +78,7 @@ public sealed class ExactRangeRebuilder(
                 value.CompanyId,
                 value.DeviceId,
                 value.StatisticsDate,
-                metricKeys[value.MetricCode],
+                metricRegistry[value.MetricCode],
                 value.SourceKind,
                 value.TimelineAtUtc,
                 value.SourcePersistedAtUtc,

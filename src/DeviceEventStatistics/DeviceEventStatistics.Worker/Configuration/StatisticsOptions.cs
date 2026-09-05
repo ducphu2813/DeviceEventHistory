@@ -139,6 +139,10 @@ public sealed class ObservabilityOptions
     public TimeSpan LagViolationAfter { get; set; } = TimeSpan.FromHours(24);
 
     public TimeSpan HealthCheckInterval { get; set; } = TimeSpan.FromSeconds(30);
+
+    public bool HealthEndpointEnabled { get; set; } = true;
+
+    public int HealthPort { get; set; } = 8080;
 }
 
 public sealed class MetadataOptions
