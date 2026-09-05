@@ -507,6 +507,8 @@ CREATE TABLE [dbo].[DES.ProcessedEvent]
     [ProjectionVersion]   int            NOT NULL,
     [EventId]             binary(32)     NOT NULL,
     [SourceKind]          varchar(64)    NOT NULL,
+    [CompanyId]           bigint         NULL,
+    [DeviceId]            bigint         NULL,
     [SourcePersistedAtUtc] datetime2(7)  NOT NULL,
     [StatisticsDate]      date           NULL,
     [Outcome]             varchar(32)    NOT NULL,

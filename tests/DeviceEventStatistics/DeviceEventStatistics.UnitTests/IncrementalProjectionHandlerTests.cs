@@ -1,5 +1,6 @@
 using DeviceEventStatistics.Application.History;
 using DeviceEventStatistics.Application.Mapping;
+using DeviceEventStatistics.Application.Metadata;
 using DeviceEventStatistics.Application.Persistence;
 using DeviceEventStatistics.Application.Projection;
 using DeviceEventStatistics.Application.Time;
@@ -36,6 +37,8 @@ public sealed class IncrementalProjectionHandlerTests
         Assert.Equal(1, result.ReadEventCount);
         Assert.True(result.IsCaughtUp);
         Assert.Single(result.Batch.ProcessedEvents);
+        Assert.Equal(2L, result.Batch.ProcessedEvents[0].CompanyId);
+        Assert.Equal(101L, result.Batch.ProcessedEvents[0].DeviceId);
         Assert.Equal(7, Assert.Single(result.Batch.MetricContributions).MetricKey);
         Assert.Single(result.Batch.DeviceSummaries);
         Assert.Contains(result.Batch.QualityContributions, value => value.QualityCode == "parsed_with_warnings");
@@ -95,6 +98,32 @@ public sealed class IncrementalProjectionHandlerTests
     }
 
     [Fact]
+    public async Task Source_mapping_diagnostics_become_a_deterministic_terminal_failure()
+    {
+        var persistedAt = new DateTimeOffset(2026, 8, 28, 8, 0, 0, TimeSpan.Zero);
+        var reader = new StubHistoryReader(new HistoryReadResult(
+            [CreateEvent(persistedAt) with
+            {
+                MappingDiagnostics = ["STAT_FIELD_TYPE:device.id"]
+            }],
+            null,
+            persistedAt.AddMinutes(5),
+            true));
+        var identity = ProjectionIdentity.Default();
+        var handler = CreateHandler(reader, new Dictionary<string, int>());
+        var lease = new ProjectionLeaseToken(identity, "worker-1", 1, persistedAt.AddHours(1));
+
+        var result = await handler.PreparePageAsync(
+            CreateOptions(identity, persistedAt.AddDays(-1)),
+            lease);
+
+        Assert.Equal(
+            ProjectionEventDisposition.FailedTerminal,
+            Assert.Single(result.Batch.ProcessedEvents).Outcome);
+        Assert.Equal("STAT_SOURCE_CONTRACT_INVALID", Assert.Single(result.Batch.Failures).ErrorCode);
+    }
+
+    [Fact]
     public async Task Maps_confirmed_device_connection_events_to_state_observations()
     {
         var persistedAt = new DateTimeOffset(2026, 8, 28, 8, 0, 0, TimeSpan.Zero);
@@ -119,6 +148,7 @@ public sealed class IncrementalProjectionHandlerTests
                 new DeviceMetricMapperRegistry([new AppHubConnectionMetricMapper()]),
                 new LocalStatisticsDateResolver()),
             new StubMetricKeyResolver(new Dictionary<string, int> { ["device_connected"] = 7 }),
+            new StubMetadataResolver(),
             new LocalStatisticsDateResolver(),
             new FixedTimeProvider(persistedAt.AddHours(1)));
         var identity = ProjectionIdentity.Default();
@@ -131,10 +161,41 @@ public sealed class IncrementalProjectionHandlerTests
         Assert.Equal("connected", observation.ObservedState);
     }
 
+    [Fact]
+    public async Task Resolves_one_dimension_per_distinct_device_in_a_batch()
+    {
+        var persistedAt = new DateTimeOffset(2026, 8, 28, 8, 0, 0, TimeSpan.Zero);
+        var first = CreateEvent(persistedAt);
+        var second = CreateEvent(persistedAt.AddMinutes(1)) with
+        {
+            EventId = new string('b', 64),
+            SourceDocumentId = "source-document-2"
+        };
+        var metadataResolver = new CountingMetadataResolver();
+        var handler = CreateHandler(
+            new StubHistoryReader(new HistoryReadResult(
+                [first, second],
+                new SourceCursor(second.PersistedAtUtc!.Value, second.EventId!),
+                persistedAt.AddMinutes(5),
+                true)),
+            new Dictionary<string, int> { ["tag_read"] = 7 },
+            metadataResolver: metadataResolver);
+        var identity = ProjectionIdentity.Default();
+        var lease = new ProjectionLeaseToken(identity, "worker-1", 1, persistedAt.AddHours(1));
+
+        var result = await handler.PreparePageAsync(
+            CreateOptions(identity, persistedAt.AddDays(-1)),
+            lease);
+
+        Assert.Single(result.Batch.DeviceDimensions);
+        Assert.Equal(1, metadataResolver.CallCount);
+    }
+
     private static IncrementalProjectionHandler CreateHandler(
         IHistoryEventReader reader,
         IReadOnlyDictionary<string, int> metricKeys,
-        ProjectionCheckpoint? checkpoint = null) =>
+        ProjectionCheckpoint? checkpoint = null,
+        IDeviceMetadataResolver? metadataResolver = null) =>
         new(
             reader,
             new StubCheckpointStore(checkpoint),
@@ -144,6 +205,7 @@ public sealed class IncrementalProjectionHandlerTests
                 new DeviceMetricMapperRegistry([new RawFileMetricMapper()]),
                 new LocalStatisticsDateResolver()),
             new StubMetricKeyResolver(metricKeys),
+            metadataResolver ?? new StubMetadataResolver(),
             new LocalStatisticsDateResolver(),
             new FixedTimeProvider(new DateTimeOffset(2026, 8, 28, 9, 0, 0, TimeSpan.Zero)));
 
@@ -201,6 +263,33 @@ public sealed class IncrementalProjectionHandlerTests
             int metricSetVersion,
             IReadOnlyCollection<string> metricCodes,
             CancellationToken cancellationToken = default) => Task.FromResult(values);
+    }
+
+    private sealed class StubMetadataResolver : IDeviceMetadataResolver
+    {
+        public DeviceMetadata? Resolve(HistoryEvent historyEvent) => null;
+    }
+
+    private sealed class CountingMetadataResolver : IDeviceMetadataResolver
+    {
+        public int CallCount { get; private set; }
+
+        public DeviceMetadata? Resolve(HistoryEvent historyEvent)
+        {
+            CallCount++;
+            return new DeviceMetadata(
+                historyEvent.CompanyId!.Value,
+                historyEvent.DeviceId!.Value,
+                "Asia/Ho_Chi_Minh",
+                420,
+                null,
+                "device-code",
+                null,
+                null,
+                null,
+                null,
+                "test");
+        }
     }
 
     private sealed class FixedTimeProvider(DateTimeOffset now) : TimeProvider

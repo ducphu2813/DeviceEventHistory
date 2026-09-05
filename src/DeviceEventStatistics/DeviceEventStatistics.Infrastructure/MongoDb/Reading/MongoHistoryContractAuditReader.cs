@@ -30,18 +30,32 @@ public sealed class MongoHistoryContractAuditReader(
         var documents = await cursor.ToListAsync(cancellationToken);
 
         var events = documents.Select(documentMapper.Map).ToArray();
-        var nextId = events.LastOrDefault()?.SourceDocumentId ?? afterSourceDocumentId;
+        var nextId = documents.LastOrDefault() is BsonDocument lastDocument
+            ? ReadCursorId(lastDocument)
+            : afterSourceDocumentId;
         return new HistoryAuditResult(events, nextId, documents.Count < pageSize);
     }
 
     private static BsonDocument CreateAuditFilter(string? afterSourceDocumentId)
     {
-        if (string.IsNullOrWhiteSpace(afterSourceDocumentId) ||
-            !ObjectId.TryParse(afterSourceDocumentId, out var objectId))
+        if (string.IsNullOrWhiteSpace(afterSourceDocumentId))
         {
             return new BsonDocument();
         }
 
-        return new BsonDocument("_id", new BsonDocument("$gt", objectId));
+        if (ObjectId.TryParse(afterSourceDocumentId, out var objectId))
+        {
+            return new BsonDocument("_id", new BsonDocument("$gt", objectId));
+        }
+
+        return new BsonDocument("_id", new BsonDocument("$gt", afterSourceDocumentId));
     }
+
+    private static string? ReadCursorId(BsonDocument document) =>
+        document.GetValue("_id", BsonNull.Value) switch
+        {
+            BsonObjectId objectId => objectId.Value.ToString(),
+            BsonString stringValue when !string.IsNullOrWhiteSpace(stringValue.Value) => stringValue.Value,
+            _ => null
+        };
 }

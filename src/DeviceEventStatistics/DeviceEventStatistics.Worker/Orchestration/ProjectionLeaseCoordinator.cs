@@ -14,8 +14,10 @@ public sealed class ProjectionLeaseCoordinator(
     ILogger<ProjectionLeaseCoordinator> logger)
 {
     private readonly Lock gate = new();
+    private readonly SemaphoreSlim lifecycleGate = new(1, 1);
     private ProjectionLeaseToken? currentLease;
     private CancellationTokenSource? leaseLostSource;
+    private int leaseReferenceCount;
 
     public ProjectionLeaseToken? CurrentLease
     {
@@ -40,6 +42,28 @@ public sealed class ProjectionLeaseCoordinator(
     }
 
     public async Task<LeaseAcquireResult> TryAcquireAsync(CancellationToken cancellationToken)
+    {
+        await lifecycleGate.WaitAsync(cancellationToken);
+        try
+        {
+            lock (gate)
+            {
+                if (currentLease is not null)
+                {
+                    leaseReferenceCount++;
+                    return new LeaseAcquireResult(true, currentLease);
+                }
+            }
+
+            return await AcquireUnderlyingLeaseAsync(cancellationToken);
+        }
+        finally
+        {
+            lifecycleGate.Release();
+        }
+    }
+
+    private async Task<LeaseAcquireResult> AcquireUnderlyingLeaseAsync(CancellationToken cancellationToken)
     {
         var options = projectionOptions.Value;
         var identity = new ProjectionIdentity(
@@ -73,6 +97,7 @@ public sealed class ProjectionLeaseCoordinator(
             leaseLostSource?.Dispose();
             leaseLostSource = new CancellationTokenSource();
             currentLease = result.Lease;
+            leaseReferenceCount = 1;
         }
 
         telemetry.RecordLeaseTransition(StatisticsContractConstants.Telemetry.LeaseAcquired);
@@ -82,57 +107,87 @@ public sealed class ProjectionLeaseCoordinator(
 
     public async Task<bool> RenewAsync(CancellationToken cancellationToken)
     {
-        var lease = CurrentLease;
-        if (lease is null)
+        await lifecycleGate.WaitAsync(cancellationToken);
+        try
         {
-            return false;
-        }
-
-        var renewed = await leaseStore.RenewAsync(
-            lease,
-            projectionOptions.Value.LeaseDuration,
-            cancellationToken);
-        if (renewed is null)
-        {
-            telemetry.RecordLeaseTransition(StatisticsContractConstants.Telemetry.LeaseLost);
-            logger.LogWarning(
-                StatisticsContractConstants.Messages.MSG_LOG_LEASE_LOST,
-                lease.Epoch);
-            SignalLeaseLost();
-            return false;
-        }
-
-        lock (gate)
-        {
-            if (currentLease?.Epoch == lease.Epoch && currentLease.Owner == lease.Owner)
+            var lease = CurrentLease;
+            if (lease is null)
             {
-                currentLease = renewed;
+                return false;
             }
+
+            var renewed = await leaseStore.RenewAsync(
+                lease,
+                projectionOptions.Value.LeaseDuration,
+                cancellationToken);
+            if (renewed is null)
+            {
+                telemetry.RecordLeaseTransition(StatisticsContractConstants.Telemetry.LeaseLost);
+                logger.LogWarning(
+                    StatisticsContractConstants.Messages.MSG_LOG_LEASE_LOST,
+                    lease.Epoch);
+                SignalLeaseLost();
+                return false;
+            }
+
+            lock (gate)
+            {
+                if (currentLease?.Epoch == lease.Epoch && currentLease.Owner == lease.Owner)
+                {
+                    currentLease = renewed;
+                }
+                else
+                {
+                    return false;
+                }
+            }
+
+            telemetry.RecordLeaseTransition(StatisticsContractConstants.Telemetry.LeaseRenewed);
+
+            return true;
         }
-
-        telemetry.RecordLeaseTransition(StatisticsContractConstants.Telemetry.LeaseRenewed);
-
-        return true;
+        finally
+        {
+            lifecycleGate.Release();
+        }
     }
 
     public async Task ReleaseAsync(CancellationToken cancellationToken)
     {
-        var lease = CurrentLease;
-        if (lease is not null)
+        await lifecycleGate.WaitAsync(cancellationToken);
+        try
         {
-            await leaseStore.ReleaseAsync(lease, cancellationToken);
-        }
+            ProjectionLeaseToken? leaseToRelease = null;
+            lock (gate)
+            {
+                if (currentLease is null || leaseReferenceCount == 0)
+                {
+                    return;
+                }
 
-        lock (gate)
-        {
-            currentLease = null;
-            leaseLostSource?.Dispose();
-            leaseLostSource = null;
-        }
+                leaseReferenceCount--;
+                if (leaseReferenceCount == 0)
+                {
+                    leaseToRelease = currentLease;
+                    currentLease = null;
+                    leaseLostSource?.Dispose();
+                    leaseLostSource = null;
+                }
+            }
 
-        if (lease is not null)
+            if (leaseToRelease is null)
+            {
+                return;
+            }
+
+            if (await leaseStore.ReleaseAsync(leaseToRelease, cancellationToken))
+            {
+                telemetry.RecordLeaseTransition(StatisticsContractConstants.Telemetry.LeaseReleased);
+            }
+        }
+        finally
         {
-            telemetry.RecordLeaseTransition(StatisticsContractConstants.Telemetry.LeaseReleased);
+            lifecycleGate.Release();
         }
     }
 
@@ -142,6 +197,7 @@ public sealed class ProjectionLeaseCoordinator(
         {
             leaseLostSource?.Cancel();
             currentLease = null;
+            leaseReferenceCount = 0;
         }
     }
 }

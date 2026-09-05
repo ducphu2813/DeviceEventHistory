@@ -22,6 +22,7 @@ foreach ($identifier in @($DatabaseName, $CollectionName)) {
 }
 
 $indexName = "ix_statistics_persisted_event_id"
+$scopedIndexName = "ix_statistics_scope_persisted_event_id"
 $javascript = @"
 const collection = db.getCollection('$CollectionName');
 const existing = collection.getIndexes().find(index => index.name === '$indexName');
@@ -33,6 +34,19 @@ if (!existing) {
       existing.key.persistedAtUtc !== 1 ||
       existing.key.eventId !== 1) {
     throw new Error('Existing cursor index has incompatible keys.');
+  }
+}
+const scopedExisting = collection.getIndexes().find(index => index.name === '$scopedIndexName');
+if (!scopedExisting) {
+  collection.createIndex({ companyId: 1, 'device.id': 1, persistedAtUtc: 1, eventId: 1 }, { name: '$scopedIndexName' });
+} else {
+  const scopedKeyNames = Object.keys(scopedExisting.key);
+  if (scopedKeyNames.length !== 4 ||
+      scopedExisting.key.companyId !== 1 ||
+      scopedExisting.key['device.id'] !== 1 ||
+      scopedExisting.key.persistedAtUtc !== 1 ||
+      scopedExisting.key.eventId !== 1) {
+    throw new Error('Existing scoped cursor index has incompatible keys.');
   }
 }
 print('Statistics cursor index verified.');

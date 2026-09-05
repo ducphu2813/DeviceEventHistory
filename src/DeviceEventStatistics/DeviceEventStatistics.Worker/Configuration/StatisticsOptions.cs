@@ -50,6 +50,12 @@ public sealed class ProjectionOptions
 
     public TimeSpan DeepDiscoveryInterval { get; set; } = TimeSpan.FromHours(6);
 
+    public int DeepDiscoveryMaxPages { get; set; } = 10;
+
+    public int DeepDiscoveryMaxEvents { get; set; } = 5000;
+
+    public TimeSpan DeepDiscoveryMaxDuration { get; set; } = TimeSpan.FromSeconds(30);
+
     public TimeSpan LeaseDuration { get; set; } = TimeSpan.FromMinutes(2);
 
     public TimeSpan LeaseRenewInterval { get; set; } = TimeSpan.FromSeconds(20);

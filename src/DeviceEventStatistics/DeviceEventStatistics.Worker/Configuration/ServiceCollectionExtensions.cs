@@ -85,6 +85,7 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<ConfigurationRedactor>();
         services.AddSingleton<StartupReadinessBarrier>();
         services.AddSingleton<StartupReadinessState>();
+        services.AddSingleton<ProjectionDefinitionRuntimeState>();
         services.AddSingleton(TimeProvider.System);
 
         return services;
@@ -149,8 +150,14 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<ProjectionTvpMapper>();
         services.AddSingleton<SqlRetryPolicy>();
         services.AddSingleton<SqlProjectionBatchOperations>();
+        services.AddSingleton<SqlDeviceDimensionStore>();
+        services.AddSingleton<IDeviceDimensionStore>(serviceProvider =>
+            serviceProvider.GetRequiredService<SqlDeviceDimensionStore>());
+        services.AddSingleton<IProjectionDefinitionStore, SqlProjectionDefinitionStore>();
+        services.AddSingleton<IProjectionDefinitionResolver, ProjectionDefinitionResolver>();
         services.AddSingleton<IMetricKeyResolver, SqlMetricKeyResolver>();
         services.AddSingleton<IncrementalProjectionHandler>();
+        services.AddSingleton<HistoryContractAuditHandler>();
         services.AddSingleton<StatisticsProjectionPipeline>();
         services.AddSingleton(serviceProvider =>
         {
@@ -169,6 +176,7 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IProjectionCheckpointStore, SqlProjectionCheckpointStore>();
         services.AddSingleton<SqlProjectionLeaseStore>();
         services.AddSingleton<SqlProjectionCheckpointStore>();
+        services.AddSingleton<IProjectionScopeReader, SqlProjectionScopeReader>();
         services.AddSingleton<ProjectionCoveragePolicy>();
         services.AddSingleton<ForwardStatePropagation>();
         services.AddSingleton<IReconciliationRequestStore, SqlReconciliationRequestStore>();

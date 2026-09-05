@@ -84,7 +84,8 @@ public sealed class SqlProjectionCheckpointStore(
         command.CommandText = $"""
             SELECT [LastPersistedAtUtc], [LastEventId], [LastProcessedAtUtc], [LastBatchSize],
                    [SweepFromAtUtc], [SweepToAtUtc], [SweepLastPersistedAtUtc], [SweepLastEventId],
-                   [DataRevision]
+                   [DataRevision], [LastCompletedSweepAtUtc], [AuditLastSourceDocumentId],
+                   [AuditStartedAtUtc], [AuditCompletedAtUtc], [AuditCycle]
             FROM {Table("ProjectionCheckpoint")}
             WHERE [ProjectionName] = @projectionName
               AND [ProjectionVersion] = @projectionVersion
@@ -109,7 +110,12 @@ public sealed class SqlProjectionCheckpointStore(
                DateEquals(reader, 6, checkpoint.SweepLastPersistedAtUtc) &&
                StringEquals(reader, 7, checkpoint.SweepLastEventId) &&
                (reader.GetInt64(8) == checkpoint.DataRevision ||
-                allowOneRevisionAhead && reader.GetInt64(8) == checkpoint.DataRevision + 1);
+                allowOneRevisionAhead && reader.GetInt64(8) == checkpoint.DataRevision + 1) &&
+               DateEquals(reader, 9, checkpoint.LastCompletedSweepAtUtc) &&
+               StringEquals(reader, 10, checkpoint.AuditLastSourceDocumentId) &&
+               DateEquals(reader, 11, checkpoint.AuditStartedAtUtc) &&
+               DateEquals(reader, 12, checkpoint.AuditCompletedAtUtc) &&
+               reader.GetInt64(13) == checkpoint.AuditCycle;
     }
 
     private async Task<bool> AdvanceAsync(
@@ -138,6 +144,11 @@ public sealed class SqlProjectionCheckpointStore(
                 [SweepToAtUtc] = @sweepToAtUtc,
                 [SweepLastPersistedAtUtc] = @sweepLastPersistedAtUtc,
                 [SweepLastEventId] = @sweepLastEventId,
+                [LastCompletedSweepAtUtc] = @lastCompletedSweepAtUtc,
+                [AuditLastSourceDocumentId] = @auditLastSourceDocumentId,
+                [AuditStartedAtUtc] = @auditStartedAtUtc,
+                [AuditCompletedAtUtc] = @auditCompletedAtUtc,
+                [AuditCycle] = @auditCycle,
                 [DataRevision] = @dataRevision,
                 [UpdatedAtUtc] = SYSUTCDATETIME()
             WHERE [ProjectionName] = @projectionName
@@ -160,6 +171,11 @@ public sealed class SqlProjectionCheckpointStore(
         AddDateParameter(command, "@sweepToAtUtc", next.SweepToAtUtc);
         AddDateParameter(command, "@sweepLastPersistedAtUtc", next.SweepLastPersistedAtUtc);
         AddStringParameter(command, "@sweepLastEventId", next.SweepLastEventId);
+        AddDateParameter(command, "@lastCompletedSweepAtUtc", next.LastCompletedSweepAtUtc);
+        AddStringParameter(command, "@auditLastSourceDocumentId", next.AuditLastSourceDocumentId);
+        AddDateParameter(command, "@auditStartedAtUtc", next.AuditStartedAtUtc);
+        AddDateParameter(command, "@auditCompletedAtUtc", next.AuditCompletedAtUtc);
+        command.Parameters.Add(new SqlParameter("@auditCycle", next.AuditCycle));
         command.Parameters.Add(new SqlParameter("@dataRevision", next.DataRevision));
         command.Parameters.Add(new SqlParameter("@rowVersion", (object?)expected.RowVersion ?? DBNull.Value));
         return await command.ExecuteNonQueryAsync(cancellationToken) == 1;
@@ -176,7 +192,8 @@ public sealed class SqlProjectionCheckpointStore(
         command.CommandText = $"""
             SELECT [LastPersistedAtUtc], [LastEventId], [LastProcessedAtUtc], [LastBatchSize],
                    [SweepFromAtUtc], [SweepToAtUtc], [SweepLastPersistedAtUtc], [SweepLastEventId],
-                   [DataRevision], [Version]
+                   [DataRevision], [LastCompletedSweepAtUtc], [AuditLastSourceDocumentId],
+                   [AuditStartedAtUtc], [AuditCompletedAtUtc], [AuditCycle], [Version]
             FROM {Table("ProjectionCheckpoint")} WITH (UPDLOCK, HOLDLOCK)
             WHERE [ProjectionName] = @projectionName
               AND [ProjectionVersion] = @projectionVersion
@@ -196,7 +213,12 @@ public sealed class SqlProjectionCheckpointStore(
             ReadDate(reader, 6),
             reader.IsDBNull(7) ? null : reader.GetString(7),
             reader.GetInt64(8),
-            reader.IsDBNull(9) ? null : ((byte[])reader[9]).ToArray());
+            reader.IsDBNull(9) ? null : ((byte[])reader[9]).ToArray(),
+            ReadDate(reader, 10),
+            reader.IsDBNull(11) ? null : reader.GetString(11),
+            ReadDate(reader, 12),
+            ReadDate(reader, 13),
+            reader.GetInt64(14));
     }
 
     private static DateTimeOffset? ReadDate(SqlDataReader reader, int ordinal) =>

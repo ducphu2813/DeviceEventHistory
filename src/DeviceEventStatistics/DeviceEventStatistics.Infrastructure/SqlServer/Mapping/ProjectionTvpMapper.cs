@@ -15,6 +15,8 @@ public sealed class ProjectionTvpMapper
             ("EventId", typeof(byte[])),
             ("SourceDocumentId", typeof(string)),
             ("SourceKind", typeof(string)),
+            ("CompanyId", typeof(long)),
+            ("DeviceId", typeof(long)),
             ("SourcePersistedAtUtc", typeof(DateTime)),
             ("StatisticsDate", typeof(DateTime)),
             ("TimelineAtUtc", typeof(DateTime)),
@@ -27,6 +29,7 @@ public sealed class ProjectionTvpMapper
                 return new object?[]
                 {
                     value.EventId.ToEventIdBytes(), value.SourceDocumentId, value.SourceKind,
+                    value.CompanyId, value.DeviceId,
                     value.SourcePersistedAtUtc.UtcDateTime, value.StatisticsDate?.ToDateTime(),
                     value.TimelineAtUtc?.UtcDateTime, value.MappingVersion,
                     value.Outcome.ToContractValue()

@@ -18,6 +18,12 @@ not depend on a database name and does not modify legacy tables. Do not run it
 while another Statistics Worker instance is processing the database. The file
 is a create-only bootstrap script; it is not an in-place schema upgrade script.
 
+For an existing Statistics database bootstrapped by migration 009, apply the
+versioned upgrade migrations through `Apply-SqlMigrations.ps1`. Migrations 010
+and 011 add the durable audit checkpoint and scoped `ProcessedEvent`/TVP V2
+contract without dropping or rewriting data. Migration 011 also adds the SQL
+membership index used by exact device reconciliation.
+
 The older `001–008` files remain versioned migration history. Automated
 deployment may still use the migration runner below; the runtime identity only
 verifies the schema and latest migration, and never creates or alters SQL

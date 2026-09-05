@@ -225,6 +225,8 @@ BEGIN
         [EventId] binary(32) NULL,
         [SourceDocumentId] varchar(256) NULL,
         [SourceKind] varchar(64) NULL,
+        [CompanyId] bigint NULL,
+        [DeviceId] bigint NULL,
         [SourcePersistedAtUtc] datetime2(7) NULL,
         [TimelineAtUtc] datetime2(7) NULL,
         [StatisticsDate] date NULL,
@@ -523,6 +525,21 @@ IF TYPE_ID(N'[dbo].[ProjectionProcessedEventType]') IS NULL
         [Outcome] varchar(32) NULL
     )');
 
+IF TYPE_ID(N'[dbo].[ProjectionProcessedEventTypeV2]') IS NULL
+    EXEC(N'CREATE TYPE [dbo].[ProjectionProcessedEventTypeV2] AS TABLE
+    (
+        [EventId] binary(32) NULL,
+        [SourceDocumentId] varchar(256) NULL,
+        [SourceKind] varchar(64) NULL,
+        [CompanyId] bigint NULL,
+        [DeviceId] bigint NULL,
+        [SourcePersistedAtUtc] datetime2(7) NULL,
+        [StatisticsDate] date NULL,
+        [TimelineAtUtc] datetime2(7) NULL,
+        [MappingVersion] varchar(64) NULL,
+        [Outcome] varchar(32) NULL
+    )');
+
 IF TYPE_ID(N'[dbo].[ProjectionMetricContributionType]') IS NULL
     EXEC(N'CREATE TYPE [dbo].[ProjectionMetricContributionType] AS TABLE
     (
@@ -680,6 +697,10 @@ CREATE INDEX [IX_DES_DeviceStateCursor_Identity]
 
 CREATE INDEX [IX_DES_ProcessedEvent_Identity]
     ON [dbo].[DES.ProcessedEvent] ([ProjectionName], [ProjectionVersion], [EventId]);
+
+CREATE INDEX [IX_DES_ProcessedEvent_Scope]
+    ON [dbo].[DES.ProcessedEvent]
+        ([ProjectionName], [ProjectionVersion], [CompanyId], [DeviceId], [StatisticsDate], [TimelineAtUtc]);
 
 CREATE INDEX [IX_DES_ProjectionCheckpoint_Identity]
     ON [dbo].[DES.ProjectionCheckpoint] ([ProjectionName], [ProjectionVersion], [PartitionKey]);

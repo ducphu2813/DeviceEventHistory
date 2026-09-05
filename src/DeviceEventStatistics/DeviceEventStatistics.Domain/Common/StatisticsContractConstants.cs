@@ -77,6 +77,8 @@ public static class StatisticsContractConstants
             "STAT-SQL-MIGRATION-MISSING: Expected migration '{0}' was not applied.";
         public const string MSG_SQL_TABLES_MISSING =
             "STAT-SQL-TABLES-MISSING: Required tables are missing: {0}.";
+        public const string MSG_SQL_COLUMNS_MISSING =
+            "STAT-SQL-COLUMNS-MISSING: Required columns are missing from '{0}': {1}.";
         public const string MSG_SQL_TYPES_MISSING =
             "STAT-SQL-TYPES-MISSING: Required table types are missing: {0}.";
         public const string MSG_SQL_METRIC_REGISTRY_MISSING =
@@ -99,6 +101,12 @@ public static class StatisticsContractConstants
             "STAT-PROJECTION-CONTRIBUTION-LIMIT: Projection batch contains {0} contributions; configured limit is {1}.";
         public const string MSG_PROJECTION_CHECKPOINT_CONFLICT =
             "STAT-PROJECTION-CHECKPOINT-CONFLICT: Projection checkpoint could not be advanced for the active lease.";
+        public const string MSG_AUDIT_CURSOR_MISSING =
+            "STAT-AUDIT-CURSOR-MISSING: An incomplete history audit page did not return a durable source cursor.";
+        public const string MSG_AUDIT_CURSOR_NOT_ADVANCED =
+            "STAT-AUDIT-CURSOR-NOT-ADVANCED: The history audit reader did not advance its durable source cursor.";
+        public const string MSG_AUDIT_PAGE_INVALID =
+            "STAT-AUDIT-PAGE-INVALID: The history audit reader returned an incomplete empty page.";
         public const string MSG_STATE_BUCKET_REQUIRED =
             "STAT-STATE-BUCKET-REQUIRED: State duration calculation requires at least one bucket.";
         public const string MSG_STATE_CURSOR_TYPE_INVALID =
@@ -110,7 +118,17 @@ public static class StatisticsContractConstants
         public const string MSG_PROJECTION_METRIC_KEY_MISSING =
             "STAT-PROJECTION-METRIC-KEY-MISSING: Metric definitions are missing for metric codes: {0}.";
         public const string MSG_PROJECTION_COVERAGE_START_MISSING =
-            "STAT-PROJECTION-COVERAGE-START-MISSING: Incremental projection requires CoverageStartAtUtc when no stored definition resolver is configured.";
+            "STAT-PROJECTION-COVERAGE-START-MISSING: Projection definition creation requires CoverageStartAtUtc.";
+        public const string MSG_PROJECTION_DEFINITION_REQUEST_INVALID =
+            "STAT-PROJECTION-DEFINITION-REQUEST-INVALID: Projection definition resolution request is invalid.";
+        public const string MSG_PROJECTION_DEFINITION_NOT_USABLE =
+            "STAT-PROJECTION-DEFINITION-NOT-USABLE: Projection definition '{0}' version {1} has lifecycle status '{2}'.";
+        public const string MSG_PROJECTION_DEFINITION_LOCK_UNAVAILABLE =
+            "STAT-PROJECTION-DEFINITION-LOCK-UNAVAILABLE: Projection definition lifecycle lock could not be acquired.";
+        public const string MSG_PROJECTION_DEFINITION_NOT_READY =
+            "STAT-PROJECTION-DEFINITION-NOT-READY: Projection definition has not been resolved by startup.";
+        public const string MSG_DEVICE_DIMENSION_LOCK_UNAVAILABLE =
+            "STAT-DEVICE-DIMENSION-LOCK-UNAVAILABLE: Device dimension writer gate is currently held.";
         public const string MSG_RECONCILIATION_REQUEST_INVALID =
             "STAT-RECONCILIATION-REQUEST-INVALID: Reconciliation request range or identity is invalid.";
         public const string MSG_RECONCILIATION_CLAIM_CONFLICT =

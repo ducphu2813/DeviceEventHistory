@@ -8,13 +8,30 @@
    Statistics tables under `dbo` without selecting a fixed database and
    without modifying legacy tables. Use it for a fresh create-only bootstrap,
    not as an in-place schema upgrade.
-3. Verify the latest schema through the worker startup preflight.
-4. Verify Mongo connectivity, the history collection, the unique event index
-   and the Statistics cursor index.
-5. Check the projection definition, checkpoint, pending reconciliation requests
+3. For an existing 009 database, run the migration runner to apply
+   `010_AddDurableAuditCheckpoint.sql` and
+   `011_AddScopedProcessedEventContract.sql`. They add durable audit fields
+   plus nullable `ProcessedEvent` device scope and TVP V2; no existing
+   processed rows are rewritten.
+4. Verify the latest schema through the worker startup preflight.
+5. Verify Mongo connectivity, the history collection, the unique event index,
+   the global Statistics cursor index and the scoped cursor index.
+6. Check the projection definition, checkpoint, audit cursor, pending reconciliation requests
    and coverage before changing a mode.
-6. Keep the Statistics worker disabled while applying schema changes or
+7. Keep the Statistics worker disabled while applying schema changes or
    enabling history TTL.
+
+For a new projection definition, set `ResumeFromStoredDefinition=false` and
+provide an explicit `CoverageStartAtUtc`. After the definition has been
+created, restart/resume with `ResumeFromStoredDefinition=true` and set
+`CoverageStartAtUtc=null`; startup loads the stored immutable contract and
+fails fast if mapping, ownership, metric-set or timezone configuration does
+not match it.
+
+Device-scoped exact reconciliation replaces only device-grained facts,
+snapshots, state and coverage. `IngestionQualityDaily` is company-grained, so
+it is intentionally left unchanged by a device-scoped rebuild to prevent one
+device from deleting another device's quality aggregate.
 
 The worker never creates SQL schema or changes the History Worker checkpoint.
 Connection strings and credentials must be supplied through local environment
@@ -42,9 +59,11 @@ remains recoverable after restart.
 ## Normal incremental operation
 
 Use `Mode=Incremental`. The worker owns one SQL lease, advances the normal
-checkpoint only after the atomic SQL transaction commits, refreshes open state
-durations and schedules rolling reconciliation. A restart resumes from the
-durable checkpoint/request state.
+checkpoint and bounded deep-discovery cursor only after the atomic SQL
+transaction commits, refreshes open state durations, schedules rolling
+reconciliation and audits Mongo by `_id` according to
+`Projection:DeepDiscoveryInterval`. A restart resumes from the durable
+checkpoint/request/audit state.
 
 ## Bootstrap a new projection version
 

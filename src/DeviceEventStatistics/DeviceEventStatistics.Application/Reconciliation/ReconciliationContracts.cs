@@ -1,5 +1,6 @@
 using DeviceEventStatistics.Application.Persistence;
 using DeviceEventStatistics.Application.Projection;
+using DeviceEventStatistics.Application.Metadata;
 using DeviceEventStatistics.Domain.State;
 
 namespace DeviceEventStatistics.Application.Reconciliation;
@@ -94,7 +95,8 @@ public sealed record ReconciliationSourceResult(
     IReadOnlyList<StateCursorInput> StateCursors,
     IReadOnlyList<QualityContribution> QualityContributions,
     IReadOnlyList<ProjectionCoverageInput> Coverage,
-    int ReadEventCount);
+    int ReadEventCount,
+    IReadOnlyList<DeviceMetadata> DeviceDimensions);
 
 public sealed record ProjectionCoverageInput(
     long CompanyId,
@@ -173,10 +175,6 @@ public interface IProjectionRebuildStore
     Task CleanupAsync(Guid runId, CancellationToken cancellationToken = default);
 }
 
-public sealed record ProjectionRecoveryDefinition(
-    bool ShouldRun,
-    string LifecycleStatus);
-
 public sealed record ProjectionRecoveryRun(
     ProjectionIdentity Identity,
     Guid RunId,
@@ -197,17 +195,6 @@ public static class ProjectionRunStatuses
 
 public interface IProjectionRecoveryStore
 {
-    Task<ProjectionRecoveryDefinition> EnsureDefinitionAsync(
-        ProjectionIdentity identity,
-        ProjectionLeaseToken lease,
-        string mappingVersion,
-        string ownershipVersion,
-        int metricSetVersion,
-        DateTimeOffset coverageStartAtUtc,
-        string timeZoneId,
-        bool requireExisting,
-        CancellationToken cancellationToken = default);
-
     Task StartRunAsync(
         ProjectionRecoveryRun run,
         ProjectionLeaseToken lease,

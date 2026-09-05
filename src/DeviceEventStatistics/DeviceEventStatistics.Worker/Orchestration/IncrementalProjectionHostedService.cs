@@ -11,6 +11,7 @@ public sealed class IncrementalProjectionHostedService(
     ProjectionLeaseCoordinator leaseCoordinator,
     StatisticsProjectionPipeline pipeline,
     StartupReadinessBarrier readinessBarrier,
+    ProjectionDefinitionRuntimeState runtimeDefinition,
     IOptions<WorkerOptions> workerOptions,
     IOptions<ProjectionOptions> projectionOptions,
     IStatisticsTelemetry telemetry,
@@ -96,23 +97,9 @@ public sealed class IncrementalProjectionHostedService(
         ProjectionOptions settings,
         CancellationToken cancellationToken)
     {
-        var coverageStart = settings.CoverageStartAtUtc ??
-            throw new InvalidOperationException(
-                StatisticsContractConstants.Messages.MSG_PROJECTION_COVERAGE_START_MISSING);
-        var projectionOptions = new IncrementalProjectionOptions(
-            new ProjectionIdentity(
-                settings.Name,
-                settings.ProjectionVersion,
-                StatisticsContractConstants.DefaultPartitionKey),
-            settings.MappingVersion,
-            settings.MetricSetVersion,
-            coverageStart,
-            settings.BatchSize,
-            settings.MaxContributionsPerBatch,
-            settings.OverlapWindow,
-            settings.ReadSafetyDelay,
-            settings.Scope.CompanyIds,
-            settings.Scope.DeviceIds);
+        var projectionOptions = ProjectionExecutionOptionsFactory.Create(
+            settings,
+            runtimeDefinition.GetRequired());
 
         while (!cancellationToken.IsCancellationRequested)
         {

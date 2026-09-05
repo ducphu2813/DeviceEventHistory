@@ -1,5 +1,6 @@
 using DeviceEventStatistics.Application.History;
 using DeviceEventStatistics.Application.Mapping;
+using DeviceEventStatistics.Application.Metadata;
 using DeviceEventStatistics.Application.Persistence;
 using DeviceEventStatistics.Application.Time;
 using DeviceEventStatistics.Domain.Common;
@@ -12,6 +13,7 @@ public sealed class ExactRangeRebuilder(
     IHistoryRangeReader historyReader,
     ProjectionEventOutcomeMapper outcomeMapper,
     IMetricKeyResolver metricKeyResolver,
+    IDeviceMetadataResolver metadataResolver,
     LocalStatisticsDateResolver dateResolver,
     StateDurationCalculator stateDurationCalculator,
     ProjectionCoveragePolicy coveragePolicy,
@@ -43,15 +45,11 @@ public sealed class ExactRangeRebuilder(
                 decision.ReasonCode ?? ReconciliationReasonCodes.CoverageUnavailable);
         }
 
-        var admitsSourceEvents = snapshot.Claim.Request.ReasonCode is
-            ReconciliationReasonCodes.Bootstrap or
-            ReconciliationReasonCodes.Backfill or
-            ReconciliationReasonCodes.Rebuild;
+        var requestedDevice = snapshot.Claim.Request.Key;
         var sourceEvents = events
-            .Where(value => value.EventId is string eventId &&
-                            (admitsSourceEvents || membership.Contains(eventId)))
-            .Where(value => !admitsSourceEvents ||
-                            value.CompanyId == snapshot.Claim.Request.Key.CompanyId)
+            .Where(value => value.EventId is not null &&
+                            value.CompanyId == requestedDevice.CompanyId &&
+                            value.DeviceId == requestedDevice.DeviceId)
             .OrderBy(value => value.TimelineAtUtc)
             .ThenBy(value => value.EventId, StringComparer.Ordinal)
             .ToArray();
@@ -130,9 +128,12 @@ public sealed class ExactRangeRebuilder(
                     : null,
                 value.Event.TimelineAtUtc,
                 options.MappingVersion,
-                value.Disposition))
+                value.Disposition,
+                NormalizeIdentity(value.Event.CompanyId),
+                NormalizeIdentity(value.Event.DeviceId)))
             .ToArray();
         var stateResult = BuildState(snapshot, targetOutcomes, decision);
+        var dimensions = DeviceMetadataBatchResolver.Resolve(sourceEvents, metadataResolver);
 
         return new ReconciliationSourceResult(
             processed,
@@ -142,7 +143,8 @@ public sealed class ExactRangeRebuilder(
             stateResult.Cursors,
             quality,
             BuildCoverage(snapshot, decision),
-            sourceEvents.Length);
+            sourceEvents.Length,
+            dimensions);
     }
 
     private async Task<IReadOnlyList<HistoryEvent>> ReadEventsAsync(
@@ -159,8 +161,8 @@ public sealed class ExactRangeRebuilder(
                 snapshot.ToTimelineAtUtc,
                 cursor,
                 pageSize,
-                null,
-                null,
+                snapshot.Claim.Request.Key.CompanyId,
+                snapshot.Claim.Request.Key.DeviceId,
                 cancellationToken);
             result.AddRange(page.Events);
             if (page.IsCaughtUp || page.NextCursor == cursor)
@@ -293,6 +295,8 @@ public sealed class ExactRangeRebuilder(
             value.LastTimelineAtUtc,
             value.LastEventId,
             value.OpeningEvidenceKind);
+
+    private static long? NormalizeIdentity(long? value) => value is > 0 ? value : null;
 
     private sealed record StateRebuildResult(
         IReadOnlyList<StateDailyContribution> Daily,

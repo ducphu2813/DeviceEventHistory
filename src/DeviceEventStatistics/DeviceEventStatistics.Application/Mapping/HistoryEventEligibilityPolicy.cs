@@ -16,6 +16,11 @@ public sealed class HistoryEventEligibilityPolicy
             return Failed("STAT_EVENT_ID_INVALID");
         }
 
+        if (historyEvent.MappingDiagnostics.Count > 0)
+        {
+            return Failed("STAT_SOURCE_CONTRACT_INVALID");
+        }
+
         if (historyEvent.SchemaVersion is not int schemaVersion ||
             !SupportedSchemaVersions.Contains(schemaVersion))
         {

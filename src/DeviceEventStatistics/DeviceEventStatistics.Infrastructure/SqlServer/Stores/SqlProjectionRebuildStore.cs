@@ -14,6 +14,7 @@ public sealed class SqlProjectionRebuildStore(
     SqlStatisticsDbContext dbContext,
     SqlStatisticsDatabaseOptions options,
     SqlProjectionBatchOperations operations,
+    SqlDeviceDimensionStore deviceDimensionStore,
     ProjectionTvpMapper mapper,
     TimeProvider timeProvider) : IProjectionRebuildStore
 {
@@ -27,7 +28,16 @@ public sealed class SqlProjectionRebuildStore(
         var from = BucketStart(claim.Request.FromStatisticsDate);
         var to = BucketStart(claim.Request.ToStatisticsDate.AddDays(1));
         var revision = await ReadRevisionAsync(session, lease, cancellationToken);
-        var membership = await ReadMembershipAsync(session, claim.Request.Identity, from, to, cancellationToken);
+        var membership = await ReadMembershipAsync(
+            session,
+            claim.Request.Identity,
+            claim.Request.Key.CompanyId,
+            claim.Request.Key.DeviceId,
+            claim.Request.FromStatisticsDate,
+            claim.Request.ToStatisticsDate,
+            from,
+            to,
+            cancellationToken);
         var opening = await ReadOpeningCursorAsync(session, claim.Request, cancellationToken);
         await session.RollbackAsync(cancellationToken);
         return new ReconciliationSnapshot(
@@ -52,7 +62,6 @@ public sealed class SqlProjectionRebuildStore(
         await BulkCopyAsync(session, "ProjectionStagingSummary", CreateSummaryTable(snapshot, result), cancellationToken);
         await BulkCopyAsync(session, "ProjectionStagingState", CreateStateTable(snapshot, result), cancellationToken);
         await BulkCopyAsync(session, "ProjectionStagingCoverage", CreateCoverageTable(snapshot, result), cancellationToken);
-        await BulkCopyAsync(session, "ProjectionStagingQuality", CreateQualityTable(snapshot, result), cancellationToken);
         await BulkCopyAsync(session, "ProjectionStagingCursor", CreateCursorTable(snapshot, result), cancellationToken);
         await session.CommitAsync(cancellationToken);
     }
@@ -66,6 +75,10 @@ public sealed class SqlProjectionRebuildStore(
         await using var session = await dbContext.OpenSessionAsync(cancellationToken);
         await operations.EnsureFencedAsync(session, snapshot.Claim.Request.Identity, lease, cancellationToken);
         await VerifyPublishTokenAsync(session, snapshot, lease, cancellationToken);
+        await deviceDimensionStore.UpsertAsync(
+            session,
+            result.DeviceDimensions,
+            cancellationToken);
 
         var request = snapshot.Claim.Request;
         var affectedRows = result.MetricContributions.Count +
@@ -78,11 +91,12 @@ public sealed class SqlProjectionRebuildStore(
             INSERT INTO {Table("ProcessedEvent")}
             (
                 [ProjectionName], [ProjectionVersion], [EventId], [SourceDocumentId], [SourceKind],
+                [CompanyId], [DeviceId],
                 [SourcePersistedAtUtc], [TimelineAtUtc], [StatisticsDate], [MappingVersion],
                 [Outcome], [ProcessedAtUtc]
             )
             SELECT @projectionName, @projectionVersion, input.[EventId], input.[SourceDocumentId],
-                   input.[SourceKind], input.[SourcePersistedAtUtc], input.[TimelineAtUtc],
+                   input.[SourceKind], input.[CompanyId], input.[DeviceId], input.[SourcePersistedAtUtc], input.[TimelineAtUtc],
                    input.[StatisticsDate], input.[MappingVersion], input.[Outcome], SYSUTCDATETIME()
             FROM @processed input
             WHERE NOT EXISTS
@@ -92,6 +106,16 @@ public sealed class SqlProjectionRebuildStore(
                   AND existing.[ProjectionVersion] = @projectionVersion
                   AND existing.[EventId] = input.[EventId]
             );
+
+            UPDATE existing
+            SET [CompanyId] = COALESCE(existing.[CompanyId], input.[CompanyId]),
+                [DeviceId] = COALESCE(existing.[DeviceId], input.[DeviceId])
+            FROM {Table("ProcessedEvent")} existing
+            INNER JOIN @processed input
+                ON existing.[ProjectionName] = @projectionName
+               AND existing.[ProjectionVersion] = @projectionVersion
+               AND existing.[EventId] = input.[EventId]
+            WHERE existing.[CompanyId] IS NULL OR existing.[DeviceId] IS NULL;
 
             DELETE FROM {Table("DeviceEventDaily")}
             WHERE [ProjectionVersion] = @projectionVersion
@@ -105,10 +129,8 @@ public sealed class SqlProjectionRebuildStore(
             WHERE [ProjectionVersion] = @projectionVersion
               AND [CompanyId] = @companyId AND [DeviceId] = @deviceId
               AND [StatisticsDate] BETWEEN @fromDate AND @toDate;
-            DELETE FROM {Table("IngestionQualityDaily")}
-            WHERE [ProjectionVersion] = @projectionVersion
-              AND [CompanyId] = @companyId
-              AND [StatisticsDate] BETWEEN @fromDate AND @toDate;
+            -- IngestionQualityDaily is company-grained. A device-scoped rebuild
+            -- must not replace another device's quality aggregate.
 
             INSERT INTO {Table("DeviceEventDaily")}
             (
@@ -207,16 +229,6 @@ public sealed class SqlProjectionRebuildStore(
                     AND existing.[StateType] = staged.[StateType]
               );
 
-            INSERT INTO {Table("IngestionQualityDaily")}
-            (
-                [ProjectionVersion], [StatisticsDate], [CompanyId], [SourceKind], [SourceId], [QualityCode],
-                [EventCount], [FirstSeenAtUtc], [LastSeenAtUtc], [UpdatedAtUtc]
-            )
-            SELECT [ProjectionVersion], [StatisticsDate], [CompanyId], [SourceKind], [SourceId], [QualityCode],
-                   [EventCount], [FirstSeenAtUtc], [LastSeenAtUtc], SYSUTCDATETIME()
-            FROM {Table("ProjectionStagingQuality")}
-            WHERE [RunId] = @runId;
-
             UPDATE coverage
             SET [CoverageStatus] = staged.[CoverageStatus], [CoveredFromAtUtc] = staged.[CoveredFromAtUtc],
                 [CoveredThroughAtUtc] = staged.[CoveredThroughAtUtc], [ReasonCode] = staged.[ReasonCode],
@@ -293,7 +305,7 @@ public sealed class SqlProjectionRebuildStore(
             {
                 AddPublishParameters(command, snapshot, lease, result);
                 var processed = command.Parameters.Add("@processed", System.Data.SqlDbType.Structured);
-                processed.TypeName = $"{options.SchemaName}.ProjectionProcessedEventType";
+                processed.TypeName = $"{options.SchemaName}.ProjectionProcessedEventTypeV2";
                 processed.Value = mapper.MapProcessedEvents(result.ProcessedEvents);
                 command.Parameters.Add(new SqlParameter("@timeZoneId", StatisticsContractConstants.DefaultTimeZoneId));
             },
@@ -373,6 +385,10 @@ public sealed class SqlProjectionRebuildStore(
     private async Task<IReadOnlyList<ReconciliationMembership>> ReadMembershipAsync(
         SqlProjectionSession session,
         ProjectionIdentity identity,
+        long companyId,
+        long deviceId,
+        DateOnly fromDate,
+        DateOnly toDate,
         DateTimeOffset from,
         DateTimeOffset to,
         CancellationToken cancellationToken)
@@ -384,19 +400,30 @@ public sealed class SqlProjectionRebuildStore(
             SELECT [EventId], [SourceDocumentId]
             FROM {Table("ProcessedEvent")} WITH (UPDLOCK, HOLDLOCK)
             WHERE [ProjectionName] = @projectionName AND [ProjectionVersion] = @projectionVersion
+              AND [CompanyId] = @companyId AND [DeviceId] = @deviceId
+              AND [StatisticsDate] >= @fromDate AND [StatisticsDate] <= @toDate
               AND [TimelineAtUtc] >= @fromUtc AND [TimelineAtUtc] < @toUtc;
             """;
         command.Parameters.Add(new SqlParameter("@projectionName", identity.ProjectionName));
         command.Parameters.Add(new SqlParameter("@projectionVersion", identity.ProjectionVersion));
+        command.Parameters.Add(new SqlParameter("@companyId", companyId));
+        command.Parameters.Add(new SqlParameter("@deviceId", deviceId));
+        command.Parameters.Add(new SqlParameter("@fromDate", fromDate.ToDateTime(TimeOnly.MinValue)));
+        command.Parameters.Add(new SqlParameter("@toDate", toDate.ToDateTime(TimeOnly.MinValue)));
         command.Parameters.Add(new SqlParameter("@fromUtc", from.UtcDateTime));
         command.Parameters.Add(new SqlParameter("@toUtc", to.UtcDateTime));
         await using var reader = await command.ExecuteReaderAsync(cancellationToken);
         var result = new List<ReconciliationMembership>();
         while (await reader.ReadAsync(cancellationToken))
         {
+            if (reader.IsDBNull(0))
+            {
+                continue;
+            }
+
             result.Add(new ReconciliationMembership(
                 Convert.ToHexString((byte[])reader[0]).ToLowerInvariant(),
-                reader.GetString(1)));
+                reader.IsDBNull(1) ? string.Empty : reader.GetString(1)));
         }
 
         return result;
@@ -519,7 +546,8 @@ public sealed class SqlProjectionRebuildStore(
         {
             var row = table.NewRow();
             row.ItemArray =
-            [snapshot.RunId, Bytes(value.EventId), DBNull.Value, DBNull.Value,
+            [snapshot.RunId, Bytes(value.EventId), value.CompanyId ?? (object)DBNull.Value,
+                value.DeviceId ?? (object)DBNull.Value,
                 value.StatisticsDate is DateOnly statisticsDate
                     ? statisticsDate.ToDateTime(TimeOnly.MinValue)
                     : DBNull.Value, Outcome(value.Outcome), now];
@@ -625,29 +653,6 @@ public sealed class SqlProjectionRebuildStore(
                 value.CompanyId, value.DeviceId, value.StatisticsDate.ToDateTime(TimeOnly.MinValue), value.CoverageKind, value.CoverageStatus,
                 value.CoveredFromAtUtc.UtcDateTime, value.CoveredThroughAtUtc.UtcDateTime,
                 value.ReasonCode ?? (object)DBNull.Value, timeProvider.GetUtcNow().UtcDateTime];
-            table.Rows.Add(row);
-        }
-
-        return table;
-    }
-
-    private DataTable CreateQualityTable(ReconciliationSnapshot snapshot, ReconciliationSourceResult result)
-    {
-        var table = CreateTable(
-            ("RunId", typeof(Guid)), ("ProjectionVersion", typeof(int)), ("StatisticsDate", typeof(DateTime)),
-            ("CompanyId", typeof(long)), ("SourceKind", typeof(string)), ("SourceId", typeof(string)),
-            ("QualityCode", typeof(string)), ("EventCount", typeof(long)), ("FirstSeenAtUtc", typeof(DateTime)),
-            ("LastSeenAtUtc", typeof(DateTime)), ("CreatedAtUtc", typeof(DateTime)));
-        foreach (var group in result.QualityContributions.GroupBy(value => new
-                     { value.StatisticsDate, value.CompanyId, value.SourceKind, value.SourceId, value.QualityCode }))
-        {
-            var values = group.ToArray();
-            var row = table.NewRow();
-            row.ItemArray =
-            [snapshot.RunId, snapshot.Claim.Request.Identity.ProjectionVersion, group.Key.StatisticsDate.ToDateTime(TimeOnly.MinValue),
-                group.Key.CompanyId, group.Key.SourceKind, group.Key.SourceId, group.Key.QualityCode, (long)values.Length,
-                values.Min(value => value.SeenAtUtc).UtcDateTime, values.Max(value => value.SeenAtUtc).UtcDateTime,
-                timeProvider.GetUtcNow().UtcDateTime];
             table.Rows.Add(row);
         }
 

@@ -11,6 +11,7 @@ namespace DeviceEventStatistics.Infrastructure.SqlServer.Stores;
 public sealed class SqlStatisticsBatchWriter(
     SqlStatisticsDbContext dbContext,
     SqlProjectionBatchOperations operations,
+    SqlDeviceDimensionStore deviceDimensionStore,
     SqlProjectionCheckpointStore checkpointStore,
     SqlRetryPolicy retryPolicy,
     SqlProjectionWriterOptions writerOptions,
@@ -35,6 +36,10 @@ public sealed class SqlStatisticsBatchWriter(
     {
         var batch = Normalize(input);
         await using var session = await dbContext.OpenSessionAsync(cancellationToken);
+        await deviceDimensionStore.UpsertAsync(
+            session,
+            batch.DeviceDimensions,
+            cancellationToken);
 
         var newEventIds = await operations.InsertNewProcessedEventsAsync(
             session,

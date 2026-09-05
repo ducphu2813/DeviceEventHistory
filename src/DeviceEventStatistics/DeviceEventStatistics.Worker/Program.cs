@@ -12,6 +12,7 @@ builder.Services.AddDeviceEventStatisticsObservability();
 builder.Services.AddHostedService<StartupInitializationHostedService>();
 builder.Services.AddHostedService<DisabledWorkerHostedService>();
 builder.Services.AddHostedService<IncrementalProjectionHostedService>();
+builder.Services.AddHostedService<HistoryContractAuditHostedService>();
 builder.Services.AddHostedService<LeaseHeartbeatHostedService>();
 builder.Services.AddHostedService<DurationRefreshHostedService>();
 builder.Services.AddHostedService<ReconciliationHostedService>();

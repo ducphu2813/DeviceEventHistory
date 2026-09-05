@@ -1,4 +1,5 @@
 using DeviceEventStatistics.Domain.State;
+using DeviceEventStatistics.Application.Metadata;
 
 namespace DeviceEventStatistics.Application.Persistence;
 
@@ -24,7 +25,9 @@ public sealed record ProcessedEventInput(
     DateOnly? StatisticsDate,
     DateTimeOffset? TimelineAtUtc,
     string MappingVersion,
-    ProjectionEventDisposition Outcome);
+    ProjectionEventDisposition Outcome,
+    long? CompanyId = null,
+    long? DeviceId = null);
 
 public sealed record MetricContribution(
     string EventId,
@@ -134,7 +137,8 @@ public sealed record ProjectionBatch(
     IReadOnlyList<DeviceSummaryContribution> DeviceSummaries,
     IReadOnlyList<StateObservationInput> StateObservations,
     IReadOnlyList<QualityContribution> QualityContributions,
-    IReadOnlyList<ProjectionFailureInput> Failures)
+    IReadOnlyList<ProjectionFailureInput> Failures,
+    IReadOnlyList<DeviceMetadata> DeviceDimensions)
 {
     public static ProjectionBatch Empty(
         Projection.ProjectionLeaseToken lease,
@@ -144,6 +148,7 @@ public sealed record ProjectionBatch(
             lease,
             checkpoint,
             checkpoint,
+            [],
             [],
             [],
             [],

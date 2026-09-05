@@ -8,7 +8,22 @@ public sealed class SqlSchemaVerifier(
     SqlStatisticsDbContext dbContext,
     SqlStatisticsDatabaseOptions options)
 {
-    public const string ExpectedLatestMigrationId = "009_CreateDeviceEventStatisticsSchema";
+    public const string ExpectedLatestMigrationId = "011_AddScopedProcessedEventContract";
+
+    private static readonly string[] RequiredProcessedEventColumns =
+    [
+        "CompanyId",
+        "DeviceId"
+    ];
+
+    private static readonly string[] RequiredCheckpointColumns =
+    [
+        "LastCompletedSweepAtUtc",
+        "AuditLastSourceDocumentId",
+        "AuditStartedAtUtc",
+        "AuditCompletedAtUtc",
+        "AuditCycle"
+    ];
 
     private static readonly string[] RequiredTables =
     [
@@ -39,6 +54,7 @@ public sealed class SqlSchemaVerifier(
     private static readonly string[] RequiredTableTypes =
     [
         "ProjectionProcessedEventType",
+        "ProjectionProcessedEventTypeV2",
         "ProjectionMetricContributionType",
         "ProjectionDeviceSummaryType",
         "ProjectionStateObservationType",
@@ -57,6 +73,8 @@ public sealed class SqlSchemaVerifier(
         await VerifySchemaExistsAsync(connection, cancellationToken);
         await VerifyMigrationAsync(connection, cancellationToken);
         await VerifyTablesAsync(connection, cancellationToken);
+        await VerifyCheckpointColumnsAsync(connection, cancellationToken);
+        await VerifyProcessedEventColumnsAsync(connection, cancellationToken);
         await VerifyTableTypesAsync(connection, cancellationToken);
         await VerifyMetricRegistryAsync(connection, cancellationToken);
     }
@@ -141,6 +159,68 @@ public sealed class SqlSchemaVerifier(
                 StatisticsContractConstants.Messages.Format(
                     StatisticsContractConstants.Messages.MSG_SQL_TYPES_MISSING,
                     string.Join(", ", missingTypes)));
+        }
+    }
+
+    private async Task VerifyProcessedEventColumnsAsync(
+        SqlConnection connection,
+        CancellationToken cancellationToken)
+    {
+        await using var command = connection.CreateCommand();
+        command.CommandText = """
+            SELECT [name]
+            FROM sys.columns
+            WHERE [object_id] = OBJECT_ID(@tableName);
+            """;
+        command.CommandTimeout = options.CommandTimeoutSeconds;
+        command.Parameters.Add(new SqlParameter(
+            "@tableName",
+            StatisticsSqlObjectNames.QualifiedTable(options.SchemaName, "ProcessedEvent")));
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+        var actualColumns = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        while (await reader.ReadAsync(cancellationToken)) actualColumns.Add(reader.GetString(0));
+
+        var missingColumns = RequiredProcessedEventColumns
+            .Where(column => !actualColumns.Contains(column))
+            .ToArray();
+        if (missingColumns.Length > 0)
+        {
+            throw new InvalidOperationException(
+                StatisticsContractConstants.Messages.Format(
+                    StatisticsContractConstants.Messages.MSG_SQL_COLUMNS_MISSING,
+                    StatisticsSqlObjectNames.QualifiedTable(options.SchemaName, "ProcessedEvent"),
+                    string.Join(", ", missingColumns)));
+        }
+    }
+
+    private async Task VerifyCheckpointColumnsAsync(
+        SqlConnection connection,
+        CancellationToken cancellationToken)
+    {
+        await using var command = connection.CreateCommand();
+        command.CommandText = """
+            SELECT [name]
+            FROM sys.columns
+            WHERE [object_id] = OBJECT_ID(@tableName);
+            """;
+        command.CommandTimeout = options.CommandTimeoutSeconds;
+        command.Parameters.Add(new SqlParameter(
+            "@tableName",
+            StatisticsSqlObjectNames.QualifiedTable(options.SchemaName, "ProjectionCheckpoint")));
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+        var actualColumns = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        while (await reader.ReadAsync(cancellationToken)) actualColumns.Add(reader.GetString(0));
+
+        var missingColumns = RequiredCheckpointColumns
+            .Where(column => !actualColumns.Contains(column))
+            .ToArray();
+        if (missingColumns.Length > 0)
+        {
+            throw new InvalidOperationException(
+                StatisticsContractConstants.Messages.Format(
+                    StatisticsContractConstants.Messages.MSG_SQL_COLUMNS_MISSING,
+                    StatisticsSqlObjectNames.QualifiedTable(options.SchemaName, "ProjectionCheckpoint"),
+                    string.Join(", ", missingColumns)));
         }
     }
 

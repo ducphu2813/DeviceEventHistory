@@ -3,6 +3,7 @@ using DeviceEventStatistics.Infrastructure.MongoDb.Indexes;
 using DeviceEventStatistics.Infrastructure.SqlServer;
 using DeviceEventStatistics.Infrastructure.SqlServer.Schema;
 using DeviceEventStatistics.Application.Mapping;
+using DeviceEventStatistics.Application.Projection;
 using DeviceEventStatistics.Domain.Common;
 using DeviceEventStatistics.Worker.Configuration;
 using Microsoft.Extensions.Options;
@@ -14,6 +15,10 @@ public sealed class StartupInitializationHostedService(
     IServiceProvider serviceProvider,
     StartupReadinessBarrier readinessBarrier,
     StartupReadinessState readinessState,
+    IOptions<ProjectionOptions> projectionOptions,
+    IOptions<MetadataOptions> metadataOptions,
+    IProjectionDefinitionResolver definitionResolver,
+    ProjectionDefinitionRuntimeState runtimeDefinition,
     ILogger<StartupInitializationHostedService> logger) : IHostedService
 {
     public async Task StartAsync(CancellationToken cancellationToken)
@@ -40,6 +45,23 @@ public sealed class StartupInitializationHostedService(
             await sqlContext.PingAsync(cancellationToken);
             await sqlContext.VerifyTargetAsync(cancellationToken);
             await schemaVerifier.VerifyAsync(cancellationToken);
+
+            var settings = projectionOptions.Value;
+            var definition = await definitionResolver.ResolveAsync(
+                new ProjectionDefinitionResolutionRequest(
+                    new ProjectionIdentity(
+                        settings.Name,
+                        settings.ProjectionVersion,
+                        StatisticsContractConstants.DefaultPartitionKey),
+                    settings.MappingVersion,
+                    EventOwnershipPolicy.Version,
+                    settings.MetricSetVersion,
+                    settings.CoverageStartAtUtc,
+                    metadataOptions.Value.TimeZoneId,
+                    settings.ResumeFromStoredDefinition,
+                    settings.Mode is ProjectionMode.Bootstrap or ProjectionMode.Rebuild),
+                cancellationToken);
+            runtimeDefinition.Set(definition);
 
             readinessState.MarkReady();
             readinessBarrier.Open();

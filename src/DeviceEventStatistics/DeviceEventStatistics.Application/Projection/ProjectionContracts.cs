@@ -28,7 +28,12 @@ public sealed record ProjectionCheckpoint(
     DateTimeOffset? SweepLastPersistedAtUtc = null,
     string? SweepLastEventId = null,
     long DataRevision = 0,
-    byte[]? RowVersion = null);
+    byte[]? RowVersion = null,
+    DateTimeOffset? LastCompletedSweepAtUtc = null,
+    string? AuditLastSourceDocumentId = null,
+    DateTimeOffset? AuditStartedAtUtc = null,
+    DateTimeOffset? AuditCompletedAtUtc = null,
+    long AuditCycle = 0);
 
 public sealed record IncrementalProjectionOptions(
     ProjectionIdentity Identity,

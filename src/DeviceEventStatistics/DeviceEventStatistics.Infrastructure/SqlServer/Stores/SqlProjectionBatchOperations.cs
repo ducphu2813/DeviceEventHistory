@@ -33,12 +33,13 @@ public sealed class SqlProjectionBatchOperations(
             INSERT INTO {Table("ProcessedEvent")}
             (
                 [ProjectionName], [ProjectionVersion], [EventId], [SourceDocumentId], [SourceKind],
+                [CompanyId], [DeviceId],
                 [SourcePersistedAtUtc], [TimelineAtUtc], [StatisticsDate], [MappingVersion],
                 [Outcome], [ProcessedAtUtc]
             )
             OUTPUT INSERTED.[EventId] INTO @newEvents
             SELECT @projectionName, @projectionVersion, input.[EventId], input.[SourceDocumentId],
-                   input.[SourceKind], input.[SourcePersistedAtUtc], input.[TimelineAtUtc],
+                   input.[SourceKind], input.[CompanyId], input.[DeviceId], input.[SourcePersistedAtUtc], input.[TimelineAtUtc],
                    input.[StatisticsDate], input.[MappingVersion], input.[Outcome], SYSUTCDATETIME()
             FROM @events input
             WHERE NOT EXISTS
@@ -49,6 +50,16 @@ public sealed class SqlProjectionBatchOperations(
                   AND existing.[ProjectionVersion] = @projectionVersion
                   AND existing.[EventId] = input.[EventId]
             );
+
+            UPDATE existing
+            SET [CompanyId] = COALESCE(existing.[CompanyId], input.[CompanyId]),
+                [DeviceId] = COALESCE(existing.[DeviceId], input.[DeviceId])
+            FROM {Table("ProcessedEvent")} existing
+            INNER JOIN @events input
+                ON existing.[ProjectionName] = @projectionName
+               AND existing.[ProjectionVersion] = @projectionVersion
+               AND existing.[EventId] = input.[EventId]
+            WHERE existing.[CompanyId] IS NULL OR existing.[DeviceId] IS NULL;
 
             SELECT [EventId] FROM @newEvents;
             """;
@@ -752,7 +763,7 @@ public sealed class SqlProjectionBatchOperations(
         IReadOnlySet<string> newEventIds)
     {
         var parameter = command.Parameters.Add("@admittedEvents", SqlDbType.Structured);
-        parameter.TypeName = $"{options.SchemaName}.ProjectionProcessedEventType";
+        parameter.TypeName = $"{options.SchemaName}.ProjectionProcessedEventTypeV2";
         parameter.Value = mapper.MapAdmittedProcessedEvents(processedEvents, newEventIds);
     }
 
@@ -764,7 +775,7 @@ public sealed class SqlProjectionBatchOperations(
 
     private static string GetTypeName(string parameterName) => parameterName switch
     {
-        "events" => "ProjectionProcessedEventType",
+        "events" => "ProjectionProcessedEventTypeV2",
         "contributions" => "ProjectionMetricContributionType",
         "summaries" => "ProjectionDeviceSummaryType",
         "stateDaily" => "ProjectionStateDailyType",

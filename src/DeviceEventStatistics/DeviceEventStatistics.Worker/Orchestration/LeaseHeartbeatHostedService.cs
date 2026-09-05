@@ -14,7 +14,7 @@ public sealed class LeaseHeartbeatHostedService(
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         await readinessBarrier.WaitAsync(stoppingToken);
-        if (!workerOptions.Value.Enabled || projectionOptions.Value.Mode is not ProjectionMode.Incremental)
+        if (!workerOptions.Value.Enabled)
         {
             return;
         }

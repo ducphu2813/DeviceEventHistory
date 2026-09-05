@@ -20,6 +20,9 @@ internal static class ConfigurationValidationErrors
     public const string SafetyDelayNonNegative = "STAT-CONFIG-SAFETY-DELAY-NON-NEGATIVE";
     public const string OverlapNonNegative = "STAT-CONFIG-OVERLAP-NON-NEGATIVE";
     public const string DeepDiscoveryPositive = "STAT-CONFIG-DEEP-DISCOVERY-POSITIVE";
+    public const string DeepDiscoveryPagesPositive = "STAT-CONFIG-DEEP-DISCOVERY-PAGES-POSITIVE";
+    public const string DeepDiscoveryEventsPositive = "STAT-CONFIG-DEEP-DISCOVERY-EVENTS-POSITIVE";
+    public const string DeepDiscoveryDurationPositive = "STAT-CONFIG-DEEP-DISCOVERY-DURATION-POSITIVE";
     public const string LeaseDurationPositive = "STAT-CONFIG-LEASE-DURATION-POSITIVE";
     public const string LeaseRenewIntervalPositive = "STAT-CONFIG-LEASE-RENEW-INTERVAL-POSITIVE";
     public const string LeaseRenewBeforeExpiry = "STAT-CONFIG-LEASE-RENEW-BEFORE-EXPIRY";
@@ -108,6 +111,9 @@ public sealed class ProjectionOptionsValidator(IOptions<WorkerOptions> workerOpt
         if (options.ReadSafetyDelay < TimeSpan.Zero) failures.Add(ConfigurationValidationErrors.SafetyDelayNonNegative);
         if (options.OverlapWindow < TimeSpan.Zero) failures.Add(ConfigurationValidationErrors.OverlapNonNegative);
         if (options.DeepDiscoveryInterval <= TimeSpan.Zero) failures.Add(ConfigurationValidationErrors.DeepDiscoveryPositive);
+        if (options.DeepDiscoveryMaxPages <= 0) failures.Add(ConfigurationValidationErrors.DeepDiscoveryPagesPositive);
+        if (options.DeepDiscoveryMaxEvents <= 0) failures.Add(ConfigurationValidationErrors.DeepDiscoveryEventsPositive);
+        if (options.DeepDiscoveryMaxDuration <= TimeSpan.Zero) failures.Add(ConfigurationValidationErrors.DeepDiscoveryDurationPositive);
         if (options.LeaseDuration <= TimeSpan.Zero) failures.Add(ConfigurationValidationErrors.LeaseDurationPositive);
         if (options.LeaseRenewInterval <= TimeSpan.Zero) failures.Add(ConfigurationValidationErrors.LeaseRenewIntervalPositive);
         if (options.LeaseRenewInterval >= options.LeaseDuration)

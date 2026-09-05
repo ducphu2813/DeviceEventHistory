@@ -1,5 +1,4 @@
 using DeviceEventStatistics.Application.Reconciliation;
-using DeviceEventStatistics.Application.Mapping;
 using DeviceEventStatistics.Application.Projection;
 using DeviceEventStatistics.Application.Time;
 using DeviceEventStatistics.Domain.Common;
@@ -12,15 +11,14 @@ namespace DeviceEventStatistics.Worker.Orchestration;
 public sealed class ManualProjectionHostedService(
     ReconciliationCoordinator coordinator,
     IReconciliationRequestStore requestStore,
-    IProjectionRecoveryStore recoveryStore,
     ProjectionLeaseCoordinator leaseCoordinator,
     StartupReadinessBarrier readinessBarrier,
+    ProjectionDefinitionRuntimeState runtimeDefinition,
     IHostApplicationLifetime applicationLifetime,
     IOptions<WorkerOptions> workerOptions,
     IOptions<ProjectionOptions> projectionOptions,
     IOptions<ReconciliationOptions> reconciliationOptions,
     IOptions<RetentionOptions> retentionOptions,
-    IOptions<MetadataOptions> metadataOptions,
     TimeProvider timeProvider,
     LocalStatisticsDateResolver dateResolver,
     GracefulShutdownCoordinator shutdownCoordinator,
@@ -62,18 +60,10 @@ public sealed class ManualProjectionHostedService(
         try
         {
             var range = ResolveRange(settings);
-            var identity = leaseResult.Lease.Identity;
-            var definition = await recoveryStore.EnsureDefinitionAsync(
-                identity,
-                leaseResult.Lease,
-                settings.MappingVersion,
-                EventOwnershipPolicy.Version,
-                settings.MetricSetVersion,
-                settings.CoverageStartAtUtc ?? dateResolver.Resolve(range.From).BucketStartAtUtc,
-                metadataOptions.Value.TimeZoneId,
-                settings.Mode is ProjectionMode.Backfill,
-                stoppingToken);
-            if (!definition.ShouldRun)
+            var definition = runtimeDefinition.GetRequired();
+            var identity = definition.Identity;
+            if (settings.Mode is (ProjectionMode.Bootstrap or ProjectionMode.Rebuild) &&
+                definition.LifecycleStatus is ProjectionLifecycleStatuses.Ready or ProjectionLifecycleStatuses.Active)
             {
                 logger.LogInformation(
                     StatisticsContractConstants.Messages.MSG_LOG_MANUAL_MODE_SKIPPED,
@@ -110,8 +100,8 @@ public sealed class ManualProjectionHostedService(
             await requestStore.EnqueueAsync(requests, leaseResult.Lease, stoppingToken);
 
             var runOptions = new ReconciliationExecutionOptions(
-                settings.MappingVersion,
-                settings.MetricSetVersion,
+                definition.MappingVersion,
+                definition.MetricSetVersion,
                 settings.LeaseDuration,
                 settings.RetryMinDelay,
                 reconciliationOptions.Value.MaxAttempts,

@@ -21,11 +21,16 @@ public sealed class ProjectionTvpMapperTests
                 null,
                 null,
                 "v1",
-                ProjectionEventDisposition.Ignored)
+                ProjectionEventDisposition.Ignored,
+                2,
+                101)
         ]);
 
         Assert.Equal(typeof(byte[]), table.Columns["EventId"]!.DataType);
         Assert.Equal(32, ((byte[])table.Rows[0]["EventId"]).Length);
+        Assert.Equal(typeof(long), table.Columns["CompanyId"]!.DataType);
+        Assert.Equal(2L, table.Rows[0]["CompanyId"]);
+        Assert.Equal(101L, table.Rows[0]["DeviceId"]);
         Assert.Equal(DBNull.Value, table.Rows[0]["StatisticsDate"]);
         Assert.Equal("ignored", table.Rows[0]["Outcome"]);
         Assert.Equal(sourcePersistedAt.UtcDateTime, table.Rows[0]["SourcePersistedAtUtc"]);

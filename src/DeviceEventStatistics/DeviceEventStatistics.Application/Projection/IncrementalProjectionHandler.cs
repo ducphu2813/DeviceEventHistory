@@ -1,5 +1,6 @@
 using DeviceEventStatistics.Application.History;
 using DeviceEventStatistics.Application.Mapping;
+using DeviceEventStatistics.Application.Metadata;
 using DeviceEventStatistics.Application.Persistence;
 using DeviceEventStatistics.Application.Reconciliation;
 using DeviceEventStatistics.Application.Time;
@@ -18,6 +19,7 @@ public sealed class IncrementalProjectionHandler(
     IProjectionCheckpointStore checkpointStore,
     ProjectionEventOutcomeMapper outcomeMapper,
     IMetricKeyResolver metricKeyResolver,
+    IDeviceMetadataResolver metadataResolver,
     LocalStatisticsDateResolver dateResolver,
     TimeProvider timeProvider)
 {
@@ -50,8 +52,41 @@ public sealed class IncrementalProjectionHandler(
             options.DeviceIds,
             cancellationToken);
 
-        var outcomes = readResult.Events.Select(outcomeMapper.Map).ToArray();
         ValidateSourceOrder(readResult.Events, sweep.PageCursor);
+        var nextCheckpoint = sweep.ApplyPage(
+            checkpoint,
+            readResult.NextCursor,
+            readResult.Events.Count,
+            readResult.IsCaughtUp,
+            now);
+        return await PrepareEventsAsync(
+            options,
+            lease,
+            checkpoint,
+            nextCheckpoint,
+            readResult.Events,
+            readResult.IsCaughtUp,
+            cancellationToken);
+    }
+
+    public async Task<PreparedProjectionPage> PrepareEventsAsync(
+        IncrementalProjectionOptions options,
+        ProjectionLeaseToken lease,
+        ProjectionCheckpoint checkpoint,
+        ProjectionCheckpoint nextCheckpoint,
+        IReadOnlyList<HistoryEvent> events,
+        bool isCaughtUp,
+        CancellationToken cancellationToken = default)
+    {
+        if (lease.Identity != options.Identity ||
+            checkpoint.Identity != options.Identity ||
+            nextCheckpoint.Identity != options.Identity)
+        {
+            throw new ArgumentException(
+                StatisticsContractConstants.Messages.MSG_SQL_LEASE_IDENTITY_MISMATCH);
+        }
+
+        var outcomes = events.Select(outcomeMapper.Map).ToArray();
         ValidateUniqueEventOutcomes(outcomes);
 
         var metricCodes = outcomes
@@ -88,7 +123,9 @@ public sealed class IncrementalProjectionHandler(
                     : null,
                 outcome.Event.TimelineAtUtc,
                 options.MappingVersion,
-                outcome.Disposition))
+                outcome.Disposition,
+                NormalizeIdentity(outcome.Event.CompanyId),
+                NormalizeIdentity(outcome.Event.DeviceId)))
             .ToArray();
 
         var metricContributions = outcomes
@@ -133,6 +170,7 @@ public sealed class IncrementalProjectionHandler(
             .Where(outcome => outcome.Failure is not null)
             .Select(outcome => outcome.Failure!)
             .ToArray();
+        var dimensions = DeviceMetadataBatchResolver.Resolve(events, metadataResolver);
         var stateObservations = outcomes
             .Where(outcome => outcome.Disposition == ProjectionEventDisposition.Aggregated)
             .Select(outcome => StateObservationFactory.Create(outcome.Event, dateResolver))
@@ -158,12 +196,6 @@ public sealed class IncrementalProjectionHandler(
                     options.MaxContributionsPerBatch));
         }
 
-        var nextCheckpoint = sweep.ApplyPage(
-            checkpoint,
-            readResult.NextCursor,
-            readResult.Events.Count,
-            readResult.IsCaughtUp,
-            now);
         var batch = new ProjectionBatch(
             options.Identity,
             lease,
@@ -174,8 +206,9 @@ public sealed class IncrementalProjectionHandler(
             summaries,
             stateObservations,
             qualityContributions,
-            failures);
-        return new PreparedProjectionPage(batch, readResult.IsCaughtUp, readResult.Events.Count);
+            failures,
+            dimensions);
+        return new PreparedProjectionPage(batch, isCaughtUp, events.Count);
     }
 
     private static void ValidateSourceOrder(
@@ -225,5 +258,7 @@ public sealed class IncrementalProjectionHandler(
     private static bool IsLowercaseSha256(string value) =>
         value.Length == 64 &&
         value.All(character => character is >= '0' and <= '9' or >= 'a' and <= 'f');
+
+    private static long? NormalizeIdentity(long? value) => value is > 0 ? value : null;
 
 }
