@@ -8,7 +8,7 @@ public sealed class SqlSchemaVerifier(
     SqlStatisticsDbContext dbContext,
     SqlStatisticsDatabaseOptions options)
 {
-    public const string ExpectedLatestMigrationId = "006_CreateStatePersistenceContracts";
+    public const string ExpectedLatestMigrationId = "008_EnableBootstrapRunType";
 
     private static readonly string[] RequiredTables =
     [
@@ -29,7 +29,11 @@ public sealed class SqlSchemaVerifier(
         "IngestionQualityDaily",
         "ProjectionStagingEvent",
         "ProjectionStagingDaily",
-        "ProjectionStagingState"
+        "ProjectionStagingState",
+        "ProjectionStagingSummary",
+        "ProjectionStagingCoverage",
+        "ProjectionStagingQuality",
+        "ProjectionStagingCursor"
     ];
 
     private static readonly string[] RequiredTableTypes =

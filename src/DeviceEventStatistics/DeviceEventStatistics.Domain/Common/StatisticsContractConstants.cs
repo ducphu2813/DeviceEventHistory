@@ -91,6 +91,42 @@ public static class StatisticsContractConstants
             "STAT-PROJECTION-METRIC-KEY-MISSING: Metric definitions are missing for metric codes: {0}.";
         public const string MSG_PROJECTION_COVERAGE_START_MISSING =
             "STAT-PROJECTION-COVERAGE-START-MISSING: Incremental projection requires CoverageStartAtUtc when no stored definition resolver is configured.";
+        public const string MSG_RECONCILIATION_REQUEST_INVALID =
+            "STAT-RECONCILIATION-REQUEST-INVALID: Reconciliation request range or identity is invalid.";
+        public const string MSG_RECONCILIATION_CLAIM_CONFLICT =
+            "STAT-RECONCILIATION-CLAIM-CONFLICT: Reconciliation request claim is no longer owned by the active lease.";
+        public const string MSG_RECONCILIATION_COVERAGE_UNAVAILABLE =
+            "STAT-RECONCILIATION-COVERAGE-UNAVAILABLE: Source coverage is insufficient for the requested reconciliation range. Reason={0}.";
+        public const string MSG_RECONCILIATION_REVISION_STALE =
+            "STAT-RECONCILIATION-REVISION-STALE: Reconciliation snapshot revision is stale and cannot be published.";
+        public const string MSG_RECONCILIATION_MAX_RANGE_EXCEEDED =
+            "STAT-RECONCILIATION-RANGE-EXCEEDED: Reconciliation range exceeds the configured maximum.";
+        public const string MSG_RECONCILIATION_RUN_FAILED =
+            "STAT-RECONCILIATION-RUN-FAILED: Exact reconciliation run failed.";
+        public const string MSG_RECONCILIATION_RANGE_INVALID =
+            "STAT-RECONCILIATION-RANGE-INVALID: The propagation range must be ordered.";
+        public const string MSG_RECONCILIATION_SOURCE_IDENTITY_MISSING =
+            "STAT-RECONCILIATION-SOURCE-IDENTITY-MISSING: A staged source identity was not found in the retained history source.";
+        public const string MSG_RECOVERY_DEFINITION_MISSING =
+            "STAT-RECOVERY-DEFINITION-MISSING: Projection definition '{0}' version {1} was not found.";
+        public const string MSG_RECOVERY_DEFINITION_CONFLICT =
+            "STAT-RECOVERY-DEFINITION-CONFLICT: Projection definition '{0}' version {1} does not match the requested immutable contract.";
+        public const string MSG_RECOVERY_RUN_CONFLICT =
+            "STAT-RECOVERY-RUN-CONFLICT: An active recovery run already exists for projection '{0}' version {1}.";
+        public const string MSG_LOG_RECONCILIATION_COMPLETED =
+            "Statistics reconciliation completed. RunId={RunId}, FromDate={FromDate}, ToDate={ToDate}, AffectedRows={AffectedRows}.";
+        public const string MSG_LOG_RECONCILIATION_CYCLE =
+            "Statistics reconciliation cycle completed. Completed={Completed}, Retried={Retried}, Failed={Failed}, CompletedAtUtc={CompletedAtUtc}.";
+        public const string MSG_LOG_RECONCILIATION_RETRY =
+            "Statistics reconciliation will retry. RequestId={RequestId}, Attempt={Attempt}, Reason={Reason}.";
+        public const string MSG_LOG_MANUAL_MODE_STARTED =
+            "Statistics manual mode started. Mode={Mode}, ProjectionVersion={ProjectionVersion}, FromDate={FromDate}, ToDate={ToDate}.";
+        public const string MSG_LOG_MANUAL_MODE_COMPLETED =
+            "Statistics manual mode completed. Mode={Mode}, Completed={Completed}, Retried={Retried}, Failed={Failed}.";
+        public const string MSG_LOG_MANUAL_MODE_SKIPPED =
+            "Statistics manual mode skipped because the projection definition is already ready. ProjectionVersion={ProjectionVersion}.";
+        public const string MSG_LOG_RETENTION_CLEANUP =
+            "Statistics operational cleanup completed. DeletedStagingRows={DeletedStagingRows}, DeletedProjectionRuns={DeletedProjectionRuns}.";
         public const string MSG_LOG_PROJECTION_LEASE_ACQUIRED =
             "Statistics projection lease acquired. Epoch={Epoch}, ExpiresAtUtc={ExpiresAtUtc}.";
         public const string MSG_LOG_PROJECTION_LEASE_UNAVAILABLE =

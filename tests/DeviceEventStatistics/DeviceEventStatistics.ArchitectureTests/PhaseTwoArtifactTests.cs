@@ -18,9 +18,9 @@ public sealed class PhaseTwoArtifactTests
             .OrderBy(name => name, StringComparer.Ordinal)
             .ToArray();
 
-        Assert.Equal(6, migrations.Length);
+        Assert.Equal(8, migrations.Length);
         Assert.Equal("001_CreateStatisticsSchema", migrations[0]);
-        Assert.Equal("006_CreateStatePersistenceContracts", migrations[^1]);
+        Assert.Equal("008_EnableBootstrapRunType", migrations[^1]);
         Assert.Contains("Checksum", File.ReadAllText(Path.Combine(root, "deploy", "device-event-statistics", "Apply-SqlMigrations.ps1")));
     }
 

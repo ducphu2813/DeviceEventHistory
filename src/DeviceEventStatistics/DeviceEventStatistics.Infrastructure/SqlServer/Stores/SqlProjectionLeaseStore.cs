@@ -161,7 +161,7 @@ public sealed class SqlProjectionLeaseStore(
     {
         await using var command = connection.CreateCommand();
         command.Transaction = transaction;
-        command.CommandText = """
+        command.CommandText = $"""
             SELECT [LeaseOwner], [LeaseExpiresAtUtc], [LeaseEpoch],
                    CASE WHEN [LeaseExpiresAtUtc] > SYSUTCDATETIME() THEN 1 ELSE 0 END
             FROM {Table("ProjectionCheckpoint")} WITH (UPDLOCK, HOLDLOCK)

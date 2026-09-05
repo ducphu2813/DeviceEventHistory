@@ -1,6 +1,7 @@
 using DeviceEventStatistics.Application.History;
 using DeviceEventStatistics.Application.Mapping;
 using DeviceEventStatistics.Application.Persistence;
+using DeviceEventStatistics.Application.Reconciliation;
 using DeviceEventStatistics.Application.Time;
 using DeviceEventStatistics.Domain.Common;
 using DeviceEventStatistics.Domain.State;
@@ -134,9 +135,17 @@ public sealed class IncrementalProjectionHandler(
             .ToArray();
         var stateObservations = outcomes
             .Where(outcome => outcome.Disposition == ProjectionEventDisposition.Aggregated)
-            .Select(outcome => CreateStateObservation(outcome.Event, dateResolver))
+            .Select(outcome => StateObservationFactory.Create(outcome.Event, dateResolver))
             .Where(value => value is not null)
-            .Select(value => value!)
+            .Select(value => new StateObservationInput(
+                value!.EventId,
+                value.Key.CompanyId,
+                value.Key.DeviceId,
+                dateResolver.Resolve(value.TimelineAtUtc).StatisticsDate,
+                value.Key.StateType,
+                value.ObservedState,
+                value.TimelineAtUtc,
+                value.OpeningEvidenceKind))
             .ToArray();
 
         var contributionCount = metricContributions.Length + qualityContributions.Length + summaries.Length;
@@ -217,50 +226,4 @@ public sealed class IncrementalProjectionHandler(
         value.Length == 64 &&
         value.All(character => character is >= '0' and <= '9' or >= 'a' and <= 'f');
 
-    private static StateObservationInput? CreateStateObservation(
-        HistoryEvent historyEvent,
-        LocalStatisticsDateResolver dateResolver)
-    {
-        if (historyEvent.EventId is null ||
-            historyEvent.CompanyId is not > 0 ||
-            historyEvent.DeviceId is not > 0 ||
-            historyEvent.TimelineAtUtc is not DateTimeOffset timelineAtUtc)
-        {
-            return null;
-        }
-
-        var stateType = historyEvent.Category switch
-        {
-            StateTypes.DeviceConnection => StateTypes.DeviceConnection,
-            StateTypes.ScannerConnection => StateTypes.ScannerConnection,
-            _ => null
-        };
-        if (stateType is null)
-        {
-            return null;
-        }
-
-        var observedState = historyEvent.Facts.Connection?.Status?.ToLowerInvariant();
-        if (observedState is not (ConnectionStates.Connected or ConnectionStates.Disconnected))
-        {
-            observedState = historyEvent.SourceEventName switch
-            {
-                "receiveDeviceScanConnect" => ConnectionStates.Connected,
-                "receiveDeviceScanDisconnect" => ConnectionStates.Disconnected,
-                _ => null
-            };
-        }
-
-        return observedState is null
-            ? null
-            : new StateObservationInput(
-                historyEvent.EventId,
-                historyEvent.CompanyId.Value,
-                historyEvent.DeviceId.Value,
-                dateResolver.Resolve(timelineAtUtc).StatisticsDate,
-                stateType,
-                observedState,
-                timelineAtUtc,
-                StateEvidenceKinds.ObservedEvent);
-    }
 }

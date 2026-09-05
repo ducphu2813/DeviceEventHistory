@@ -14,6 +14,9 @@ builder.Services.AddHostedService<DisabledWorkerHostedService>();
 builder.Services.AddHostedService<IncrementalProjectionHostedService>();
 builder.Services.AddHostedService<LeaseHeartbeatHostedService>();
 builder.Services.AddHostedService<DurationRefreshHostedService>();
+builder.Services.AddHostedService<ReconciliationHostedService>();
+builder.Services.AddHostedService<ManualProjectionHostedService>();
+builder.Services.AddHostedService<RetentionCleanupHostedService>();
 
 var host = builder.Build();
 

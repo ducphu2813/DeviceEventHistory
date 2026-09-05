@@ -15,6 +15,7 @@ using DeviceEventStatistics.Application.Metadata;
 using DeviceEventStatistics.Application.Time;
 using DeviceEventStatistics.Application.Projection;
 using DeviceEventStatistics.Application.Persistence;
+using DeviceEventStatistics.Application.Reconciliation;
 using DeviceEventStatistics.Domain.State;
 using DeviceEventStatistics.Worker.HealthChecks;
 using DeviceEventStatistics.Worker.Orchestration;
@@ -141,6 +142,8 @@ public static class ServiceCollectionExtensions
             return new SqlStatisticsDbContext(options);
         });
         services.AddSingleton<SqlSchemaVerifier>();
+        services.AddSingleton(serviceProvider =>
+            serviceProvider.GetRequiredService<IOptions<DatabaseSettingsOptions>>().Value.SqlServer);
         services.AddSingleton<ProjectionTvpMapper>();
         services.AddSingleton<SqlRetryPolicy>();
         services.AddSingleton<SqlProjectionBatchOperations>();
@@ -161,6 +164,16 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<StateDurationCalculator>();
         services.AddSingleton<IProjectionLeaseStore, SqlProjectionLeaseStore>();
         services.AddSingleton<IProjectionCheckpointStore, SqlProjectionCheckpointStore>();
+        services.AddSingleton<SqlProjectionLeaseStore>();
+        services.AddSingleton<SqlProjectionCheckpointStore>();
+        services.AddSingleton<ProjectionCoveragePolicy>();
+        services.AddSingleton<ForwardStatePropagation>();
+        services.AddSingleton<IReconciliationRequestStore, SqlReconciliationRequestStore>();
+        services.AddSingleton<IProjectionRebuildStore, SqlProjectionRebuildStore>();
+        services.AddSingleton<IProjectionRecoveryStore, SqlProjectionRecoveryStore>();
+        services.AddSingleton<IOperationalCleanupStore, SqlOperationalCleanupStore>();
+        services.AddSingleton<ExactRangeRebuilder>();
+        services.AddSingleton<ReconciliationCoordinator>();
 
         return services;
     }

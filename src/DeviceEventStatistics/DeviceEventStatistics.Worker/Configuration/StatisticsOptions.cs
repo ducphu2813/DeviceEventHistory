@@ -15,6 +15,7 @@ public enum ProjectionMode
 {
     Incremental,
     Reconciliation,
+    Bootstrap,
     Backfill,
     Rebuild
 }
@@ -106,6 +107,8 @@ public sealed class ReconciliationOptions
 
     public int MaxRequestsPerRun { get; set; } = 100;
 
+    public int MaxAttempts { get; set; } = 5;
+
     public int MaxRangeDays { get; set; } = 31;
 }
 
@@ -118,6 +121,8 @@ public sealed class RetentionOptions
     public int MinimumHistoryHeadroomDays { get; set; } = 2;
 
     public TimeSpan RecoveryLookback { get; set; } = TimeSpan.FromHours(1);
+
+    public int ProjectionRunRetentionDays { get; set; } = 90;
 }
 
 public sealed class ObservabilityOptions

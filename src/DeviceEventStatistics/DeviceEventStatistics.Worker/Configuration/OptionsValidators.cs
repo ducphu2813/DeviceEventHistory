@@ -28,6 +28,7 @@ internal static class ConfigurationValidationErrors
     public const string RetryMaxDelayAfterMin = "STAT-CONFIG-RETRY-MAX-DELAY-AFTER-MIN";
     public const string ManualRangeRequired = "STAT-CONFIG-MANUAL-RANGE-REQUIRED";
     public const string ManualRangeOrdered = "STAT-CONFIG-MANUAL-RANGE-ORDERED";
+    public const string ScopeRequiredForManualMode = "STAT-CONFIG-MANUAL-SCOPE-REQUIRED";
     public const string ScopeIdPositive = "STAT-CONFIG-SCOPE-ID-POSITIVE";
     public const string ScopeIdDuplicated = "STAT-CONFIG-SCOPE-ID-DUPLICATED";
     public const string StateTypeRequired = "STAT-CONFIG-STATE-TYPE-REQUIRED";
@@ -39,10 +40,12 @@ internal static class ConfigurationValidationErrors
     public const string ReconciliationIntervalPositive = "STAT-CONFIG-RECONCILIATION-INTERVAL-POSITIVE";
     public const string RollingDaysPositive = "STAT-CONFIG-ROLLING-DAYS-POSITIVE";
     public const string RequestsPositive = "STAT-CONFIG-REQUESTS-POSITIVE";
+    public const string AttemptsPositive = "STAT-CONFIG-ATTEMPTS-POSITIVE";
     public const string RangeDaysPositive = "STAT-CONFIG-RANGE-DAYS-POSITIVE";
     public const string RetentionPositive = "STAT-CONFIG-RETENTION-POSITIVE";
     public const string RetentionHeadroomInvalid = "STAT-CONFIG-RETENTION-HEADROOM-INVALID";
     public const string RecoveryLookbackPositive = "STAT-CONFIG-RECOVERY-LOOKBACK-POSITIVE";
+    public const string ProjectionRunRetentionPositive = "STAT-CONFIG-PROJECTION-RUN-RETENTION-POSITIVE";
     public const string LagWarningPositive = "STAT-CONFIG-LAG-WARNING-POSITIVE";
     public const string LagViolationAfterWarning = "STAT-CONFIG-LAG-VIOLATION-AFTER-WARNING";
     public const string HealthIntervalPositive = "STAT-CONFIG-HEALTH-INTERVAL-POSITIVE";
@@ -155,7 +158,7 @@ public sealed class ProjectionOptionsValidator(IOptions<WorkerOptions> workerOpt
 
     private static void ValidateManualRange(ProjectionOptions options, ICollection<string> failures)
     {
-        var requiresRange = options.Mode is ProjectionMode.Backfill or ProjectionMode.Rebuild;
+        var requiresRange = options.Mode is ProjectionMode.Bootstrap or ProjectionMode.Backfill or ProjectionMode.Rebuild;
         if (requiresRange && (options.ManualRange?.FromUtc is null || options.ManualRange.ToUtc is null))
         {
             failures.Add(ConfigurationValidationErrors.ManualRangeRequired);
@@ -167,6 +170,12 @@ public sealed class ProjectionOptionsValidator(IOptions<WorkerOptions> workerOpt
             options.ManualRange.FromUtc >= options.ManualRange.ToUtc)
         {
             failures.Add(ConfigurationValidationErrors.ManualRangeOrdered);
+        }
+
+        if (requiresRange &&
+            (options.Scope is null || options.Scope.CompanyIds.Count == 0 || options.Scope.DeviceIds.Count == 0))
+        {
+            failures.Add(ConfigurationValidationErrors.ScopeRequiredForManualMode);
         }
     }
 }
@@ -224,6 +233,7 @@ public sealed class ReconciliationOptionsValidator(IOptions<WorkerOptions> worke
         if (options.ScheduleInterval <= TimeSpan.Zero) failures.Add(ConfigurationValidationErrors.ReconciliationIntervalPositive);
         if (options.RollingDays <= 0) failures.Add(ConfigurationValidationErrors.RollingDaysPositive);
         if (options.MaxRequestsPerRun <= 0) failures.Add(ConfigurationValidationErrors.RequestsPositive);
+        if (options.MaxAttempts <= 0) failures.Add(ConfigurationValidationErrors.AttemptsPositive);
         if (options.MaxRangeDays <= 0) failures.Add(ConfigurationValidationErrors.RangeDaysPositive);
 
         return failures.Count == 0
@@ -251,6 +261,10 @@ public sealed class RetentionOptionsValidator(IOptions<WorkerOptions> workerOpti
         }
 
         if (options.RecoveryLookback <= TimeSpan.Zero) failures.Add(ConfigurationValidationErrors.RecoveryLookbackPositive);
+        if (options.ProjectionRunRetentionDays <= 0)
+        {
+            failures.Add(ConfigurationValidationErrors.ProjectionRunRetentionPositive);
+        }
 
         return failures.Count == 0
             ? ValidateOptionsResult.Success
