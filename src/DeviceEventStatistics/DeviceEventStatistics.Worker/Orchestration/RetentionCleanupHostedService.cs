@@ -1,3 +1,4 @@
+using DeviceEventStatistics.Application.Observability;
 using DeviceEventStatistics.Application.Reconciliation;
 using DeviceEventStatistics.Application.Projection;
 using DeviceEventStatistics.Domain.Common;
@@ -14,6 +15,8 @@ public sealed class RetentionCleanupHostedService(
     IOptions<ProjectionOptions> projectionOptions,
     IOptions<RetentionOptions> retentionOptions,
     TimeProvider timeProvider,
+    IStatisticsTelemetry telemetry,
+    GracefulShutdownCoordinator shutdownCoordinator,
     ILogger<RetentionCleanupHostedService> logger) : BackgroundService
 {
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -39,6 +42,13 @@ public sealed class RetentionCleanupHostedService(
         var acquiredHere = false;
         try
         {
+            if (!shutdownCoordinator.TryBeginOperation(out var operation))
+            {
+                return;
+            }
+
+            using (operation)
+            {
             if (lease is null)
             {
                 var acquired = await leaseCoordinator.TryAcquireAsync(cancellationToken);
@@ -64,6 +74,10 @@ public sealed class RetentionCleanupHostedService(
                     StatisticsContractConstants.Messages.MSG_LOG_RETENTION_CLEANUP,
                     result.DeletedStagingRows,
                     result.DeletedProjectionRuns);
+            }
+            telemetry.RecordOperationalCleanup(
+                result.DeletedStagingRows,
+                result.DeletedProjectionRuns);
             }
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)

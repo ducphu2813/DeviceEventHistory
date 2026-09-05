@@ -41,7 +41,7 @@ public sealed class SqlOperationalCleanupStore(
                 WHERE EXISTS
                 (
                     SELECT 1 FROM {Table("ProjectionRun")} run
-                    WHERE run.[ProjectionRunId] = stage.[RunId]
+                    WHERE run.[RunId] = stage.[RunId]
                       AND run.[ProjectionName] = @projectionName
                       AND run.[ProjectionVersion] = @projectionVersion
                       AND run.[Status] IN ('succeeded', 'failed', 'cancelled')
@@ -95,5 +95,6 @@ public sealed class SqlOperationalCleanupStore(
         command.Parameters.Add(new SqlParameter("@stagingCutoffAtUtc", stagingCutoffAtUtc.UtcDateTime));
     }
 
-    private string Table(string name) => $"[{options.SchemaName}].[{name}]";
+    private string Table(string name) =>
+        StatisticsSqlObjectNames.QualifiedTable(options.SchemaName, name);
 }

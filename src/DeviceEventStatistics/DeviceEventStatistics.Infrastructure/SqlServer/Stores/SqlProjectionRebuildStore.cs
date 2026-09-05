@@ -256,7 +256,7 @@ public sealed class SqlProjectionRebuildStore(
             SET [Status] = 'Completed', [CompletedAtUtc] = SYSUTCDATETIME(),
                 [ClaimOwner] = NULL, [ClaimEpoch] = NULL, [ClaimExpiresAtUtc] = NULL,
                 [ErrorSummary] = NULL
-            WHERE [RequestId] = @requestId AND [Status] = 'Processing'
+            WHERE [ReconciliationRequestId] = @requestId AND [Status] = 'Processing'
               AND [ClaimOwner] = @owner AND [ClaimEpoch] = @epoch
               AND [DirtyGeneration] = @dirtyGeneration;
 
@@ -272,12 +272,12 @@ public sealed class SqlProjectionRebuildStore(
                 [DuplicateEventCount] = 0, [IgnoredEventCount] = @ignoredEventCount,
                 [FailureEventCount] = @failureEventCount, [AffectedRowCount] = @affectedRowCount,
                 [CapturedDataRevision] = @capturedRevision, [ErrorSummary] = NULL
-            WHERE [ProjectionRunId] = @runId;
+            WHERE [RunId] = @runId;
 
             IF @@ROWCOUNT = 0
             INSERT INTO {Table("ProjectionRun")}
             (
-                [ProjectionRunId], [ProjectionName], [ProjectionVersion], [RunType], [RequestedFromDate],
+                [RunId], [ProjectionName], [ProjectionVersion], [RunType], [RequestedFromDate],
                 [RequestedToDate], [RequestedCompanyId], [StartedAtUtc], [CompletedAtUtc], [Status],
                 [ReadEventCount], [AggregatedEventCount], [DuplicateEventCount], [IgnoredEventCount],
                 [FailureEventCount], [AffectedRowCount], [CapturedDataRevision]
@@ -325,7 +325,7 @@ public sealed class SqlProjectionRebuildStore(
             IF NOT EXISTS
             (
                 SELECT 1 FROM {Table("ReconciliationRequest")}
-                WHERE [RequestId] = @requestId AND [Status] = 'Processing'
+                WHERE [ReconciliationRequestId] = @requestId AND [Status] = 'Processing'
                   AND [ClaimOwner] = @owner AND [ClaimEpoch] = @epoch
                   AND [DirtyGeneration] = @dirtyGeneration
             ) OR NOT EXISTS
@@ -360,7 +360,7 @@ public sealed class SqlProjectionRebuildStore(
             ) AND EXISTS
             (
                 SELECT 1 FROM {Table("ReconciliationRequest")}
-                WHERE [RequestId] = @requestId AND [Status] = 'Completed'
+                WHERE [ReconciliationRequestId] = @requestId AND [Status] = 'Completed'
             ) THEN 1 ELSE 0 END;
             """;
         AddPublishParameters(command, snapshot, lease, null);
@@ -764,5 +764,6 @@ public sealed class SqlProjectionRebuildStore(
             date.ToDateTime(TimeOnly.MinValue, DateTimeKind.Unspecified),
             TimeSpan.FromHours(7)).ToUniversalTime();
 
-    private string Table(string name) => $"[{options.SchemaName}].[{name}]";
+    private string Table(string name) =>
+        StatisticsSqlObjectNames.QualifiedTable(options.SchemaName, name);
 }

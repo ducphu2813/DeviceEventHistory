@@ -8,32 +8,32 @@ public sealed class SqlSchemaVerifier(
     SqlStatisticsDbContext dbContext,
     SqlStatisticsDatabaseOptions options)
 {
-    public const string ExpectedLatestMigrationId = "008_EnableBootstrapRunType";
+    public const string ExpectedLatestMigrationId = "009_CreateDeviceEventStatisticsSchema";
 
     private static readonly string[] RequiredTables =
     [
-        "SchemaMigration",
-        "ProjectionDefinition",
-        "MetricDefinition",
-        "DeviceDimension",
-        "DeviceEventDaily",
-        "DeviceDailySnapshot",
-        "DeviceStateDaily",
-        "DeviceStateCursor",
-        "ProcessedEvent",
-        "ProjectionCheckpoint",
-        "ProjectionCoverage",
-        "ReconciliationRequest",
-        "ProjectionFailure",
-        "ProjectionRun",
-        "IngestionQualityDaily",
-        "ProjectionStagingEvent",
-        "ProjectionStagingDaily",
-        "ProjectionStagingState",
-        "ProjectionStagingSummary",
-        "ProjectionStagingCoverage",
-        "ProjectionStagingQuality",
-        "ProjectionStagingCursor"
+        StatisticsSqlObjectNames.Table("SchemaMigration"),
+        StatisticsSqlObjectNames.Table("ProjectionDefinition"),
+        StatisticsSqlObjectNames.Table("MetricDefinition"),
+        StatisticsSqlObjectNames.Table("DeviceDimension"),
+        StatisticsSqlObjectNames.Table("DeviceEventDaily"),
+        StatisticsSqlObjectNames.Table("DeviceDailySnapshot"),
+        StatisticsSqlObjectNames.Table("DeviceStateDaily"),
+        StatisticsSqlObjectNames.Table("DeviceStateCursor"),
+        StatisticsSqlObjectNames.Table("ProcessedEvent"),
+        StatisticsSqlObjectNames.Table("ProjectionCheckpoint"),
+        StatisticsSqlObjectNames.Table("ProjectionCoverage"),
+        StatisticsSqlObjectNames.Table("ReconciliationRequest"),
+        StatisticsSqlObjectNames.Table("ProjectionFailure"),
+        StatisticsSqlObjectNames.Table("ProjectionRun"),
+        StatisticsSqlObjectNames.Table("IngestionQualityDaily"),
+        StatisticsSqlObjectNames.Table("ProjectionStagingEvent"),
+        StatisticsSqlObjectNames.Table("ProjectionStagingDaily"),
+        StatisticsSqlObjectNames.Table("ProjectionStagingState"),
+        StatisticsSqlObjectNames.Table("ProjectionStagingSummary"),
+        StatisticsSqlObjectNames.Table("ProjectionStagingCoverage"),
+        StatisticsSqlObjectNames.Table("ProjectionStagingQuality"),
+        StatisticsSqlObjectNames.Table("ProjectionStagingCursor")
     ];
 
     private static readonly string[] RequiredTableTypes =
@@ -81,7 +81,7 @@ public sealed class SqlSchemaVerifier(
         await using var command = connection.CreateCommand();
         command.CommandText = $"""
             SELECT [Checksum]
-            FROM {QuoteIdentifier(options.SchemaName)}.[SchemaMigration]
+            FROM {StatisticsSqlObjectNames.QualifiedTable(options.SchemaName, "SchemaMigration")}
             WHERE [MigrationId] = @migrationId;
             """;
         command.CommandTimeout = options.CommandTimeoutSeconds;
@@ -149,7 +149,7 @@ public sealed class SqlSchemaVerifier(
         await using var command = connection.CreateCommand();
         command.CommandText = $"""
             SELECT COUNT_BIG(*)
-            FROM {QuoteIdentifier(options.SchemaName)}.[MetricDefinition]
+            FROM {StatisticsSqlObjectNames.QualifiedTable(options.SchemaName, "MetricDefinition")}
             WHERE [MetricSetVersion] = 1;
             """;
         command.CommandTimeout = options.CommandTimeoutSeconds;
@@ -160,5 +160,4 @@ public sealed class SqlSchemaVerifier(
         }
     }
 
-    private static string QuoteIdentifier(string value) => $"[{value.Replace("]", "]]", StringComparison.Ordinal)}]";
 }

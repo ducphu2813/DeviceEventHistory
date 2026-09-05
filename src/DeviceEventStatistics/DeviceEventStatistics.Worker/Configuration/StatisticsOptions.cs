@@ -85,8 +85,7 @@ public sealed class StateOptions
 
     public bool Enabled { get; set; } = true;
 
-    public List<string> StateTypes { get; set; } =
-        ["device_connection", "scanner_connection"];
+    public List<string> StateTypes { get; set; } = [];
 
     public int MaxForwardPropagationDays { get; set; } = 31;
 

@@ -126,12 +126,12 @@ public sealed class SqlProjectionRecoveryStore(
             IF NOT EXISTS
             (
                 SELECT 1 FROM {Table("ProjectionRun")}
-                WHERE [ProjectionRunId] = @runId
+                WHERE [RunId] = @runId
             )
             BEGIN
                 INSERT INTO {Table("ProjectionRun")}
                 (
-                    [ProjectionRunId], [ProjectionName], [ProjectionVersion], [RunType],
+                    [RunId], [ProjectionName], [ProjectionVersion], [RunType],
                     [RequestedFromDate], [RequestedToDate], [RequestedCompanyId], [StartedAtUtc],
                     [Status], [ReadEventCount], [AggregatedEventCount], [DuplicateEventCount],
                     [IgnoredEventCount], [FailureEventCount], [AffectedRowCount]
@@ -171,7 +171,7 @@ public sealed class SqlProjectionRecoveryStore(
             SET [CompletedAtUtc] = SYSUTCDATETIME(), [Status] = @status,
                 [ReadEventCount] = @readEventCount, [AffectedRowCount] = @affectedRowCount,
                 [ErrorSummary] = @errorSummary
-            WHERE [ProjectionRunId] = @runId;
+            WHERE [RunId] = @runId;
 
             IF @runType IN ('bootstrap', 'rebuild') AND @status IN (@succeeded, @failed)
             BEGIN
@@ -228,5 +228,6 @@ public sealed class SqlProjectionRecoveryStore(
         command.Parameters.Add(new SqlParameter("@startedAtUtc", run.StartedAtUtc.UtcDateTime));
     }
 
-    private string Table(string name) => $"[{options.SchemaName}].[{name}]";
+    private string Table(string name) =>
+        StatisticsSqlObjectNames.QualifiedTable(options.SchemaName, name);
 }

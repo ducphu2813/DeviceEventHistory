@@ -19,6 +19,29 @@ public sealed class MongoHistoryDbContext(
             new BsonDocument("ping", 1),
             cancellationToken: cancellationToken);
 
+    public async Task<(DateTimeOffset? OldestPersistedAtUtc, DateTimeOffset? LatestPersistedAtUtc)>
+        ReadPersistedBoundsAsync(CancellationToken cancellationToken)
+    {
+        var validTimestamp = new BsonDocument(
+            "persistedAtUtc",
+            new BsonDocument("$type", "date"));
+        var collection = HistoryCollection;
+        var ascending = await collection
+            .Find(validTimestamp)
+            .Sort(Builders<BsonDocument>.Sort.Ascending("persistedAtUtc"))
+            .Limit(1)
+            .Project(Builders<BsonDocument>.Projection.Include("persistedAtUtc"))
+            .FirstOrDefaultAsync(cancellationToken);
+        var descending = await collection
+            .Find(validTimestamp)
+            .Sort(Builders<BsonDocument>.Sort.Descending("persistedAtUtc"))
+            .Limit(1)
+            .Project(Builders<BsonDocument>.Projection.Include("persistedAtUtc"))
+            .FirstOrDefaultAsync(cancellationToken);
+
+        return (ReadPersistedAtUtc(ascending), ReadPersistedAtUtc(descending));
+    }
+
     public async Task VerifyReadContractAsync(CancellationToken cancellationToken)
     {
         var collectionNames = await (await Database.ListCollectionNamesAsync(cancellationToken: cancellationToken))
@@ -48,5 +71,16 @@ public sealed class MongoHistoryDbContext(
                     StatisticsContractConstants.Messages.MSG_MONGO_INDEX_MISSING,
                     string.Join(", ", missingIndexes)));
         }
+    }
+
+    private static DateTimeOffset? ReadPersistedAtUtc(BsonDocument? document)
+    {
+        if (document is null || !document.TryGetValue("persistedAtUtc", out var value) ||
+            value.BsonType != BsonType.DateTime)
+        {
+            return null;
+        }
+
+        return new DateTimeOffset(value.ToUniversalTime(), TimeSpan.Zero);
     }
 }

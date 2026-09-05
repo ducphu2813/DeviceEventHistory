@@ -24,12 +24,10 @@ public sealed class SqlProjectionBatchOperations(
         if (events.Count == 0) return new HashSet<string>(StringComparer.Ordinal);
         await EnsureFencedAsync(session, identity, lease, cancellationToken);
 
-        await ExecuteAsync(
-            session,
-            $"""
-            IF OBJECT_ID('tempdb..#StatisticsNewEvents') IS NULL
-                CREATE TABLE #StatisticsNewEvents ([EventId] binary(32) NOT NULL PRIMARY KEY);
-
+        await using var command = session.Connection.CreateCommand();
+        command.Transaction = session.Transaction;
+        command.CommandText = $"""
+            SET NOCOUNT ON;
             DECLARE @newEvents TABLE ([EventId] binary(32) NOT NULL PRIMARY KEY);
 
             INSERT INTO {Table("ProcessedEvent")}
@@ -52,19 +50,26 @@ public sealed class SqlProjectionBatchOperations(
                   AND existing.[EventId] = input.[EventId]
             );
 
-            INSERT INTO #StatisticsNewEvents ([EventId])
             SELECT [EventId] FROM @newEvents;
-            """,
-            command => AddProjectionParameters(command, identity, mapper.MapProcessedEvents(events), "events"),
-            cancellationToken);
+            """;
+        command.CommandTimeout = options.CommandTimeoutSeconds;
+        AddProjectionParameters(command, identity, mapper.MapProcessedEvents(events), "events");
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+        var result = new HashSet<string>(StringComparer.Ordinal);
+        while (await reader.ReadAsync(cancellationToken))
+        {
+            result.Add(Convert.ToHexString((byte[])reader[0]).ToLowerInvariant());
+        }
 
-        return await ReadNewEventIdsAsync(session, cancellationToken);
+        return result;
     }
 
     public async Task<int> UpsertMetricDailyAsync(
         SqlProjectionSession session,
         ProjectionIdentity identity,
         IReadOnlyCollection<MetricContribution> contributions,
+        IReadOnlyCollection<ProcessedEventInput> processedEvents,
+        IReadOnlySet<string> newEventIds,
         ProjectionLeaseToken lease,
         CancellationToken cancellationToken = default)
     {
@@ -100,7 +105,7 @@ public sealed class SqlProjectionBatchOperations(
                    SUM(CONVERT(bigint, CASE WHEN input.[TimeBasis] = 'received' THEN 1 ELSE 0 END)),
                    MIN(input.[TimelineAtUtc]), MAX(input.[TimelineAtUtc]), MAX(input.[SourcePersistedAtUtc])
             FROM @contributions input
-            INNER JOIN #StatisticsNewEvents newEvents ON newEvents.[EventId] = input.[EventId]
+            INNER JOIN @admittedEvents newEvents ON newEvents.[EventId] = input.[EventId]
             GROUP BY input.[CompanyId], input.[DeviceId], input.[StatisticsDate], input.[MetricKey], input.[SourceKind];
 
             UPDATE target
@@ -144,7 +149,11 @@ public sealed class SqlProjectionBatchOperations(
                   AND target.[SourceKind] = source.[SourceKind]
             );
             """,
-            command => AddProjectionParameters(command, identity, mapper.MapMetricContributions(contributions), "contributions"),
+            command =>
+            {
+                AddProjectionParameters(command, identity, mapper.MapMetricContributions(contributions), "contributions");
+                AddAdmittedEventsParameter(command, processedEvents, newEventIds);
+            },
             cancellationToken);
 
         return affectedRows;
@@ -192,6 +201,8 @@ public sealed class SqlProjectionBatchOperations(
         SqlProjectionSession session,
         ProjectionIdentity identity,
         IReadOnlyCollection<DeviceSummaryContribution> contributions,
+        IReadOnlyCollection<ProcessedEventInput> processedEvents,
+        IReadOnlySet<string> newEventIds,
         ProjectionLeaseToken lease,
         CancellationToken cancellationToken = default)
     {
@@ -219,7 +230,7 @@ public sealed class SqlProjectionBatchOperations(
                    SUM(CONVERT(bigint, CASE WHEN input.[IsWarning] = 1 THEN 1 ELSE 0 END)),
                    MIN(input.[TimelineAtUtc]), MAX(input.[TimelineAtUtc])
             FROM @summaries input
-            INNER JOIN #StatisticsNewEvents newEvents ON newEvents.[EventId] = input.[EventId]
+            INNER JOIN @admittedEvents newEvents ON newEvents.[EventId] = input.[EventId]
             GROUP BY input.[CompanyId], input.[DeviceId], input.[StatisticsDate];
 
             UPDATE target
@@ -267,6 +278,7 @@ public sealed class SqlProjectionBatchOperations(
             command =>
             {
                 AddProjectionParameters(command, identity, mapper.MapDeviceSummaries(contributions), "summaries");
+                AddAdmittedEventsParameter(command, processedEvents, newEventIds);
                 command.Parameters.Add(new SqlParameter("@timeZoneId", StatisticsContractConstants.DefaultTimeZoneId));
             },
             cancellationToken);
@@ -276,6 +288,8 @@ public sealed class SqlProjectionBatchOperations(
         SqlProjectionSession session,
         ProjectionIdentity identity,
         IReadOnlyCollection<QualityContribution> contributions,
+        IReadOnlyCollection<ProcessedEventInput> processedEvents,
+        IReadOnlySet<string> newEventIds,
         ProjectionLeaseToken lease,
         CancellationToken cancellationToken = default)
     {
@@ -301,7 +315,7 @@ public sealed class SqlProjectionBatchOperations(
             SELECT input.[StatisticsDate], input.[CompanyId], input.[SourceKind], input.[SourceId], input.[QualityCode],
                    COUNT_BIG(*), MIN(input.[SeenAtUtc]), MAX(input.[SeenAtUtc])
             FROM @quality input
-            INNER JOIN #StatisticsNewEvents newEvents ON newEvents.[EventId] = input.[EventId]
+            INNER JOIN @admittedEvents newEvents ON newEvents.[EventId] = input.[EventId]
             GROUP BY input.[StatisticsDate], input.[CompanyId], input.[SourceKind], input.[SourceId], input.[QualityCode];
 
             UPDATE target
@@ -339,7 +353,11 @@ public sealed class SqlProjectionBatchOperations(
                   AND target.[QualityCode] = source.[QualityCode]
             );
             """,
-            command => AddProjectionParameters(command, identity, mapper.MapQualityContributions(contributions), "quality"),
+            command =>
+            {
+                AddProjectionParameters(command, identity, mapper.MapQualityContributions(contributions), "quality");
+                AddAdmittedEventsParameter(command, processedEvents, newEventIds);
+            },
             cancellationToken);
     }
 
@@ -617,10 +635,12 @@ public sealed class SqlProjectionBatchOperations(
             INSERT INTO {Table("ReconciliationRequest")}
             (
                 [ProjectionName], [ProjectionVersion], [CompanyId], [DeviceId], [StateType],
-                [FromStatisticsDate], [ToStatisticsDate], [ReasonCode], [Status], [RequestedAtUtc]
+                [FromStatisticsDate], [ToStatisticsDate], [ReasonCode], [Status], [RequestedAtUtc],
+                [AttemptCount], [DirtyGeneration]
             )
             SELECT @projectionName, @projectionVersion, input.[CompanyId], input.[DeviceId], input.[StateType],
-                   input.[FromStatisticsDate], input.[ToStatisticsDate], input.[ReasonCode], 'Pending', input.[RequestedAtUtc]
+                   input.[FromStatisticsDate], input.[ToStatisticsDate], input.[ReasonCode], 'Pending', input.[RequestedAtUtc],
+                   0, 1
             FROM @reconciliation input
             WHERE NOT EXISTS
             (
@@ -707,24 +727,6 @@ public sealed class SqlProjectionBatchOperations(
         return await command.ExecuteNonQueryAsync(cancellationToken);
     }
 
-    private async Task<IReadOnlySet<string>> ReadNewEventIdsAsync(
-        SqlProjectionSession session,
-        CancellationToken cancellationToken)
-    {
-        await using var command = session.Connection.CreateCommand();
-        command.Transaction = session.Transaction;
-        command.CommandText = "SELECT [EventId] FROM #StatisticsNewEvents;";
-        command.CommandTimeout = options.CommandTimeoutSeconds;
-        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
-        var result = new HashSet<string>(StringComparer.Ordinal);
-        while (await reader.ReadAsync(cancellationToken))
-        {
-            result.Add(Convert.ToHexString((byte[])reader[0]).ToLowerInvariant());
-        }
-
-        return result;
-    }
-
     private void AddProjectionParameters(
         SqlCommand command,
         ProjectionIdentity identity,
@@ -744,9 +746,18 @@ public sealed class SqlProjectionBatchOperations(
         command.Parameters.Add(new SqlParameter("@partitionKey", identity.PartitionKey));
     }
 
-    private string Table(string tableName) => $"{Quote(options.SchemaName)}.[{tableName}]";
+    private void AddAdmittedEventsParameter(
+        SqlCommand command,
+        IReadOnlyCollection<ProcessedEventInput> processedEvents,
+        IReadOnlySet<string> newEventIds)
+    {
+        var parameter = command.Parameters.Add("@admittedEvents", SqlDbType.Structured);
+        parameter.TypeName = $"{options.SchemaName}.ProjectionProcessedEventType";
+        parameter.Value = mapper.MapAdmittedProcessedEvents(processedEvents, newEventIds);
+    }
 
-    private static string Quote(string identifier) => $"[{identifier.Replace("]", "]]", StringComparison.Ordinal)}]";
+    private string Table(string tableName) =>
+        StatisticsSqlObjectNames.QualifiedTable(options.SchemaName, tableName);
 
     private static DateTimeOffset ReadDateTimeOffset(SqlDataReader reader, int ordinal) =>
         new(DateTime.SpecifyKind(reader.GetDateTime(ordinal), DateTimeKind.Utc));

@@ -82,12 +82,21 @@ Không đọc raw text/arguments cho normal aggregation. Raw payload chỉ đư�
 ### 5.1. Naming
 
 - SQL schema: `[dbo]`.
-- Table/column: PascalCase.
-- Primary key: `PK_<Table>`.
-- Unique index: `UX_<Table>_<Columns>`.
+- Table names: `DES.<BaseTableName>` and must be referenced as
+  `[dbo].[DES.<BaseTableName>]` because the dot is part of the table name.
+- Column: PascalCase.
+- Mỗi physical table có đúng một primary key dạng
+  `<TableName>Id INT IDENTITY(1, 1) PRIMARY KEY`, khai báo inline.
+- Tất cả cột ngoài primary key đều cho phép `NULL`; application chịu trách nhiệm
+  validate và ghi đủ dữ liệu bắt buộc theo contract.
+- Không dùng composite primary key, unique index, foreign key, check constraint
+  hoặc default constraint.
+- Business identity được tra cứu và khóa bằng non-unique index cùng SQL transaction lock.
 - Non-unique index: `IX_<Table>_<Columns>`.
-- Check constraint: `CK_<Table>_<Rule>`.
-- Default constraint: `DF_<Table>_<Column>`.
+
+File `009_CreateDeviceEventStatisticsSchema.sql` là physical DDL chuẩn để triển khai.
+Các đoạn SQL chi tiết phía dưới mô tả logical column contract; PK và nullability vật lý
+luôn tuân theo convention tại mục này và script 009.
 
 ### 5.2. Data type
 
@@ -111,17 +120,17 @@ Tất cả cột có hậu tố `AtUtc` lưu UTC. Không dùng SQL `timestamp` l
 ## 6. Tổng quan tables
 
 ```text
-dbo.DeviceDimension
-dbo.MetricDefinition
-dbo.DeviceEventDaily
-dbo.DeviceDailySnapshot
-dbo.DeviceStateCursor
-dbo.ProcessedEvent
-dbo.ProjectionCheckpoint
-dbo.ReconciliationRequest
-dbo.ProjectionFailure
-dbo.ProjectionRun
-dbo.IngestionQualityDaily
+[dbo].[DES.DeviceDimension]
+[dbo].[DES.MetricDefinition]
+[dbo].[DES.DeviceEventDaily]
+[dbo].[DES.DeviceDailySnapshot]
+[dbo].[DES.DeviceStateCursor]
+[dbo].[DES.ProcessedEvent]
+[dbo].[DES.ProjectionCheckpoint]
+[dbo].[DES.ReconciliationRequest]
+[dbo].[DES.ProjectionFailure]
+[dbo].[DES.ProjectionRun]
+[dbo].[DES.IngestionQualityDaily]
 ```
 
 Quan hệ logic:
@@ -141,38 +150,32 @@ ProjectionRun ------------ incremental/reconcile/backfill audit
 IngestionQualityDaily ----- source/data-quality aggregate
 ```
 
-Các foreign key trong `dbo` là optional ở implementation. Projection correctness không được phụ thuộc vào việc ERP/device catalog đã sync kịp. Nếu dùng foreign key, projector phải tạo placeholder `DeviceDimension` trong cùng transaction trước khi ghi fact.
+Không tạo foreign key trong `dbo`. Projection correctness không được phụ thuộc vào việc ERP/device catalog đã sync kịp; projector vẫn phải tạo hoặc cập nhật placeholder `DeviceDimension` theo application contract khi cần.
 
 ## 7. `DeviceDimension`
 
 Giữ current display metadata phục vụ report. Đây không phải authoritative device master và không thay thế ERP catalog.
 
 ```sql
-CREATE TABLE [dbo].[DeviceDimension]
+CREATE TABLE [dbo].[DES.DeviceDimension]
 (
-    [CompanyId]          bigint         NOT NULL,
-    [DeviceId]           bigint         NOT NULL,
+    [DeviceDimensionId]  INT IDENTITY(1, 1) PRIMARY KEY,
+    [CompanyId]          bigint         NULL,
+    [DeviceId]           bigint         NULL,
     [DeviceCode]         nvarchar(100)  NULL,
     [DeviceName]         nvarchar(250)  NULL,
     [DeviceType]         varchar(64)    NULL,
     [GateId]             bigint         NULL,
     [GateCode]           nvarchar(100)  NULL,
     [GateName]           nvarchar(250)  NULL,
-    [TimeZoneId]         nvarchar(100)  NOT NULL,
-    [TimeZoneEffectiveFromUtc] datetime2(7) NOT NULL DEFAULT '2000-01-01T00:00:00Z',
-    [IsActive]           bit            NOT NULL,
-    [MetadataSource]     varchar(64)    NOT NULL,
-    [MetadataUpdatedAtUtc] datetime2(7) NOT NULL,
-    [CreatedAtUtc]       datetime2(7)   NOT NULL,
-    [UpdatedAtUtc]       datetime2(7)   NOT NULL,
-    [Version]            rowversion     NOT NULL,
-
-    CONSTRAINT [PK_DeviceDimension]
-        PRIMARY KEY CLUSTERED ([CompanyId], [DeviceId]),
-    CONSTRAINT [CK_DeviceDimension_PositiveCompany]
-        CHECK ([CompanyId] > 0),
-    CONSTRAINT [CK_DeviceDimension_PositiveDevice]
-        CHECK ([DeviceId] > 0)
+    [TimeZoneId]         nvarchar(100)  NULL,
+    [TimeZoneEffectiveFromUtc] datetime2(7) NULL,
+    [IsActive]           bit            NULL,
+    [MetadataSource]     varchar(64)    NULL,
+    [MetadataUpdatedAtUtc] datetime2(7) NULL,
+    [CreatedAtUtc]       datetime2(7)   NULL,
+    [UpdatedAtUtc]       datetime2(7)   NULL,
+    [Version]            rowversion     NULL
 );
 ```
 
@@ -200,7 +203,7 @@ IX_DeviceDimension_Company_Gate
 Registry cho canonical statistics metric. Mapping logic nằm trong versioned application code; table cung cấp stable key, display metadata, grouping và health eligibility.
 
 ```sql
-CREATE TABLE [dbo].[MetricDefinition]
+CREATE TABLE [dbo].[DES.MetricDefinition]
 (
     [MetricKey]          int            IDENTITY(1,1) NOT NULL,
     [MetricCode]         varchar(100)   NOT NULL,
@@ -271,7 +274,7 @@ ProjectionVersion + CompanyId + DeviceId + StatisticsDate + MetricKey + SourceKi
 Giữ `SourceKind` trong grain để không cộng chéo raw-log/AppHub khi chưa có cross-source identity.
 
 ```sql
-CREATE TABLE [dbo].[DeviceEventDaily]
+CREATE TABLE [dbo].[DES.DeviceEventDaily]
 (
     [ProjectionVersion]       int            NOT NULL,
     [CompanyId]               bigint         NOT NULL,
@@ -346,7 +349,7 @@ Semantics:
 Một row tổng hợp trạng thái, duration và health của một device/day.
 
 ```sql
-CREATE TABLE [dbo].[DeviceDailySnapshot]
+CREATE TABLE [dbo].[DES.DeviceDailySnapshot]
 (
     [ProjectionVersion]        int            NOT NULL,
     [CompanyId]                bigint         NOT NULL,
@@ -462,7 +465,7 @@ IX_DeviceDailySnapshot_Company_Health_Date
 Giữ state cuối cùng để tính duration qua batch và qua midnight. Đây là operational projection state, không phải report fact.
 
 ```sql
-CREATE TABLE [dbo].[DeviceStateCursor]
+CREATE TABLE [dbo].[DES.DeviceStateCursor]
 (
     [ProjectionVersion]   int            NOT NULL,
     [CompanyId]           bigint         NOT NULL,
@@ -497,7 +500,7 @@ State transition processor phải split interval tại business-day boundary và
 Transactional inbox chống cộng trùng khi retry, crash hoặc overlap reconciliation/incremental read.
 
 ```sql
-CREATE TABLE [dbo].[ProcessedEvent]
+CREATE TABLE [dbo].[DES.ProcessedEvent]
 (
     [ProcessedEventKey]   bigint         IDENTITY(1,1) NOT NULL,
     [ProjectionName]      varchar(100)   NOT NULL,
@@ -518,11 +521,11 @@ CREATE TABLE [dbo].[ProcessedEvent]
 );
 
 CREATE UNIQUE INDEX [UX_ProcessedEvent_Projection_Event]
-    ON [dbo].[ProcessedEvent]
+    ON [dbo].[DES.ProcessedEvent]
        ([ProjectionName], [ProjectionVersion], [EventId]);
 
 CREATE INDEX [IX_ProcessedEvent_ProcessedAtUtc]
-    ON [dbo].[ProcessedEvent] ([ProcessedAtUtc]);
+    ON [dbo].[DES.ProcessedEvent] ([ProcessedAtUtc]);
 ```
 
 Rules:
@@ -539,7 +542,7 @@ Rules:
 Cursor và optional lease của incremental projector. Nó hoàn toàn độc lập với Mongo `ingestion_checkpoints` của raw-log.
 
 ```sql
-CREATE TABLE [dbo].[ProjectionCheckpoint]
+CREATE TABLE [dbo].[DES.ProjectionCheckpoint]
 (
     [ProjectionName]        varchar(100)  NOT NULL,
     [ProjectionVersion]     int           NOT NULL,
@@ -593,7 +596,7 @@ Sprint 3 chạy một active incremental projector. Lease bảo vệ deployment 
 Hàng đợi bền vững lưu trữ các yêu cầu tính toán lại (Reconciliation) khi phát sinh sự kiện chuyển trạng thái đến muộn (out-of-order) hoặc có thay đổi cấu hình múi giờ/metadata.
 
 ```sql
-CREATE TABLE [dbo].[ReconciliationRequest]
+CREATE TABLE [dbo].[DES.ReconciliationRequest]
 (
     [RequestId]             bigint         IDENTITY(1,1) NOT NULL,
     [ProjectionName]        varchar(100)   NOT NULL,
@@ -636,7 +639,7 @@ IX_ReconciliationRequest_Status_Requested
 Lưu event không thể aggregate do statistics contract, không copy raw payload.
 
 ```sql
-CREATE TABLE [dbo].[ProjectionFailure]
+CREATE TABLE [dbo].[DES.ProjectionFailure]
 (
     [ProjectionFailureKey] bigint         IDENTITY(1,1) NOT NULL,
     [FailureId]            binary(32)     NOT NULL,
@@ -695,32 +698,26 @@ Data/contract failure có thể ghi terminal failure rồi advance projection ch
 Audit một incremental, reconciliation hoặc backfill run.
 
 ```sql
-CREATE TABLE [dbo].[ProjectionRun]
+CREATE TABLE [dbo].[DES.ProjectionRun]
 (
-    [ProjectionRunId]      uniqueidentifier NOT NULL,
-    [ProjectionName]       varchar(100)     NOT NULL,
-    [ProjectionVersion]    int              NOT NULL,
-    [RunType]              varchar(32)      NOT NULL,
+    [ProjectionRunId]      INT IDENTITY(1, 1) PRIMARY KEY,
+    [RunId]                uniqueidentifier NULL,
+    [ProjectionName]       varchar(100)     NULL,
+    [ProjectionVersion]    int              NULL,
+    [RunType]              varchar(32)      NULL,
     [RequestedFromDate]    date             NULL,
     [RequestedToDate]      date             NULL,
     [RequestedCompanyId]   bigint           NULL,
-    [StartedAtUtc]         datetime2(7)     NOT NULL,
+    [StartedAtUtc]         datetime2(7)     NULL,
     [CompletedAtUtc]       datetime2(7)     NULL,
-    [Status]               varchar(32)      NOT NULL,
-    [ReadEventCount]       bigint           NOT NULL,
-    [AggregatedEventCount] bigint           NOT NULL,
-    [DuplicateEventCount]  bigint           NOT NULL,
-    [IgnoredEventCount]    bigint           NOT NULL,
-    [FailureEventCount]    bigint           NOT NULL,
-    [AffectedRowCount]     bigint           NOT NULL,
-    [ErrorSummary]         nvarchar(2000)    NULL,
-
-    CONSTRAINT [PK_ProjectionRun]
-        PRIMARY KEY CLUSTERED ([ProjectionRunId]),
-    CONSTRAINT [CK_ProjectionRun_Type]
-        CHECK ([RunType] IN ('incremental', 'reconciliation', 'backfill', 'rebuild')),
-    CONSTRAINT [CK_ProjectionRun_Status]
-        CHECK ([Status] IN ('running', 'succeeded', 'failed', 'cancelled'))
+    [Status]               varchar(32)      NULL,
+    [ReadEventCount]       bigint           NULL,
+    [AggregatedEventCount] bigint           NULL,
+    [DuplicateEventCount]  bigint           NULL,
+    [IgnoredEventCount]    bigint           NULL,
+    [FailureEventCount]    bigint           NULL,
+    [AffectedRowCount]     bigint           NULL,
+    [ErrorSummary]         nvarchar(2000)   NULL
 );
 ```
 
@@ -736,7 +733,7 @@ IX_ProjectionRun_Name_StartedAtUtc
 Thống kê chất lượng source/history độc lập với device health. Một parse failure không có `DeviceId` không được ép vào device snapshot.
 
 ```sql
-CREATE TABLE [dbo].[IngestionQualityDaily]
+CREATE TABLE [dbo].[DES.IngestionQualityDaily]
 (
     [ProjectionVersion] int            NOT NULL,
     [StatisticsDate]    date           NOT NULL,
@@ -964,8 +961,8 @@ SELECT
     d.EventCount,
     d.FirstEventAtUtc,
     d.LastEventAtUtc
-FROM dbo.DeviceEventDaily d
-JOIN dbo.MetricDefinition m
+FROM [dbo].[DES.DeviceEventDaily] d
+JOIN [dbo].[DES.MetricDefinition] m
   ON m.MetricKey = d.MetricKey
 WHERE d.ProjectionVersion = @ProjectionVersion
   AND d.CompanyId = @CompanyId
@@ -980,8 +977,8 @@ SELECT
     d.StatisticsDate,
     m.MetricCode,
     SUM(d.EventCount) AS EventCount
-FROM dbo.DeviceEventDaily d
-JOIN dbo.MetricDefinition m
+FROM [dbo].[DES.DeviceEventDaily] d
+JOIN [dbo].[DES.MetricDefinition] m
   ON m.MetricKey = d.MetricKey
 WHERE d.ProjectionVersion = @ProjectionVersion
   AND d.CompanyId = @CompanyId

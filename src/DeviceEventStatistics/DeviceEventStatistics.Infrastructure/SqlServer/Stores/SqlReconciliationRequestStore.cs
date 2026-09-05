@@ -29,7 +29,7 @@ public sealed class SqlReconciliationRequestStore(
                 session,
                 $"""
                 DECLARE @requestId bigint;
-                SELECT TOP (1) @requestId = [RequestId]
+                SELECT TOP (1) @requestId = [ReconciliationRequestId]
                 FROM {Table("ReconciliationRequest")} WITH (UPDLOCK, HOLDLOCK)
                 WHERE [ProjectionName] = @projectionName
                   AND [ProjectionVersion] = @projectionVersion
@@ -39,7 +39,7 @@ public sealed class SqlReconciliationRequestStore(
                   AND [Status] IN ('Pending', 'Processing', 'Completed')
                   AND [FromStatisticsDate] <= @toDate
                   AND [ToStatisticsDate] >= @fromDate
-                ORDER BY [RequestId];
+                ORDER BY [ReconciliationRequestId];
 
                 IF @requestId IS NULL
                 BEGIN
@@ -47,12 +47,12 @@ public sealed class SqlReconciliationRequestStore(
                     (
                         [ProjectionName], [ProjectionVersion], [CompanyId], [DeviceId], [StateType],
                         [FromStatisticsDate], [ToStatisticsDate], [ReasonCode], [Status],
-                        [RequestedAtUtc], [DirtyGeneration], [EvidenceEventId]
+                        [RequestedAtUtc], [AttemptCount], [DirtyGeneration], [EvidenceEventId]
                     )
                     VALUES
                     (
                         @projectionName, @projectionVersion, @companyId, @deviceId, @stateType,
-                        @fromDate, @toDate, @reasonCode, 'Pending', @requestedAtUtc, 1, @evidenceEventId
+                        @fromDate, @toDate, @reasonCode, 'Pending', @requestedAtUtc, 0, 1, @evidenceEventId
                     );
                 END
                 ELSE
@@ -67,7 +67,7 @@ public sealed class SqlReconciliationRequestStore(
                         [NextAttemptAtUtc] = NULL,
                         [EvidenceEventId] = @evidenceEventId,
                         [ErrorSummary] = NULL
-                    WHERE [RequestId] = @requestId;
+                    WHERE [ReconciliationRequestId] = @requestId;
                 END;
                 """,
                 command =>
@@ -112,14 +112,14 @@ public sealed class SqlReconciliationRequestStore(
         var requestId = await ReadScalarAsync<long>(
             session,
             $"""
-            SELECT TOP (1) [RequestId]
+            SELECT TOP (1) [ReconciliationRequestId]
             FROM {Table("ReconciliationRequest")} WITH (UPDLOCK, READPAST, ROWLOCK)
             WHERE [ProjectionName] = @projectionName
               AND [ProjectionVersion] = @projectionVersion
               AND [Status] = 'Pending'
               AND ([NextAttemptAtUtc] IS NULL OR [NextAttemptAtUtc] <= SYSUTCDATETIME())
               AND [AttemptCount] < @maximumAttempts
-            ORDER BY [RequestedAtUtc], [RequestId];
+            ORDER BY [RequestedAtUtc], [ReconciliationRequestId];
             """,
             command =>
             {
@@ -142,7 +142,7 @@ public sealed class SqlReconciliationRequestStore(
                 [ClaimExpiresAtUtc] = DATEADD(SECOND, @claimSeconds, SYSUTCDATETIME()),
                 [StartedAtUtc] = COALESCE([StartedAtUtc], SYSUTCDATETIME()),
                 [ErrorSummary] = NULL
-            WHERE [RequestId] = @requestId
+            WHERE [ReconciliationRequestId] = @requestId
               AND [Status] = 'Pending';
             """,
             command =>
@@ -176,7 +176,7 @@ public sealed class SqlReconciliationRequestStore(
         command.CommandText = $"""
             UPDATE {Table("ReconciliationRequest")}
             SET [ClaimExpiresAtUtc] = DATEADD(SECOND, @claimSeconds, SYSUTCDATETIME())
-            WHERE [RequestId] = @requestId
+            WHERE [ReconciliationRequestId] = @requestId
               AND [Status] = 'Processing'
               AND [ClaimOwner] = @owner
               AND [ClaimEpoch] = @epoch;
@@ -213,19 +213,21 @@ public sealed class SqlReconciliationRequestStore(
             $"""
             UPDATE {Table("ReconciliationRequest")}
             SET [ToStatisticsDate] = @chunkToDate
-            WHERE [RequestId] = @requestId AND [Status] = 'Processing'
+            WHERE [ReconciliationRequestId] = @requestId AND [Status] = 'Processing'
               AND [ClaimOwner] = @owner AND [ClaimEpoch] = @epoch
               AND [DirtyGeneration] = @dirtyGeneration;
 
             INSERT INTO {Table("ReconciliationRequest")}
             (
                 [ProjectionName], [ProjectionVersion], [CompanyId], [DeviceId], [StateType],
-                [FromStatisticsDate], [ToStatisticsDate], [ReasonCode], [Status], [RequestedAtUtc], [DirtyGeneration], [EvidenceEventId]
+                [FromStatisticsDate], [ToStatisticsDate], [ReasonCode], [Status], [RequestedAtUtc],
+                [AttemptCount], [DirtyGeneration], [EvidenceEventId]
             )
             VALUES
             (
                 @projectionName, @projectionVersion, @companyId, @deviceId, @stateType,
-                @successorFromDate, @successorToDate, @reasonCode, 'Pending', @requestedAtUtc, @successorGeneration, @evidenceEventId
+                @successorFromDate, @successorToDate, @reasonCode, 'Pending', @requestedAtUtc,
+                0, @successorGeneration, @evidenceEventId
             );
             """,
             command =>
@@ -277,7 +279,7 @@ public sealed class SqlReconciliationRequestStore(
             $"""
             UPDATE {Table("ReconciliationRequest")}
             SET [ToStatisticsDate] = @toDate, [DirtyGeneration] = [DirtyGeneration] + 1
-            WHERE [RequestId] = @requestId AND [Status] = 'Processing'
+            WHERE [ReconciliationRequestId] = @requestId AND [Status] = 'Processing'
               AND [ClaimOwner] = @owner AND [ClaimEpoch] = @epoch
               AND [DirtyGeneration] = @dirtyGeneration;
             """,
@@ -320,7 +322,7 @@ public sealed class SqlReconciliationRequestStore(
                 [ClaimOwner] = NULL, [ClaimEpoch] = NULL, [ClaimExpiresAtUtc] = NULL,
                 [CompletedAtUtc] = CASE WHEN @status = 'Failed' THEN SYSUTCDATETIME() ELSE [CompletedAtUtc] END,
                 [ErrorSummary] = @errorSummary
-            WHERE [RequestId] = @requestId
+            WHERE [ReconciliationRequestId] = @requestId
               AND [Status] = 'Processing'
               AND [ClaimOwner] = @owner
               AND [ClaimEpoch] = @epoch;
@@ -347,12 +349,12 @@ public sealed class SqlReconciliationRequestStore(
         command.Transaction = session.Transaction;
         command.CommandTimeout = options.CommandTimeoutSeconds;
         command.CommandText = $"""
-            SELECT [RequestId], [ProjectionName], [ProjectionVersion], [CompanyId], [DeviceId], [StateType],
+            SELECT [ReconciliationRequestId], [ProjectionName], [ProjectionVersion], [CompanyId], [DeviceId], [StateType],
                    [FromStatisticsDate], [ToStatisticsDate], [ReasonCode], [Status], [AttemptCount],
                    [NextAttemptAtUtc], [ClaimOwner], [ClaimEpoch], [ClaimExpiresAtUtc], [DirtyGeneration],
                    [RequestedAtUtc], [ErrorSummary], [EvidenceEventId]
             FROM {Table("ReconciliationRequest")}
-            WHERE [RequestId] = @requestId;
+            WHERE [ReconciliationRequestId] = @requestId;
             """;
         command.Parameters.Add(new SqlParameter("@requestId", requestId));
         await using var reader = await command.ExecuteReaderAsync(cancellationToken);
@@ -425,7 +427,7 @@ public sealed class SqlReconciliationRequestStore(
 
     private static ReconciliationRequest MapRequest(SqlDataReader reader) =>
         new(
-            reader.GetInt64(0),
+            reader.GetInt32(0),
             new ProjectionIdentity(reader.GetString(1), reader.GetInt32(2), StatisticsContractConstants.DefaultPartitionKey),
             new(reader.GetInt64(3), reader.GetInt64(4), reader.GetString(5)),
             DateOnly.FromDateTime(reader.GetDateTime(6)),
@@ -474,5 +476,6 @@ public sealed class SqlReconciliationRequestStore(
         command.Parameters.Add(new SqlParameter("@epoch", lease.Epoch));
     }
 
-    private string Table(string name) => $"[{options.SchemaName}].[{name}]";
+    private string Table(string name) =>
+        StatisticsSqlObjectNames.QualifiedTable(options.SchemaName, name);
 }

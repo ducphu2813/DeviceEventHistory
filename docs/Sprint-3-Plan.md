@@ -105,10 +105,12 @@ P0 cập nhật `Sprint-3-Design.md` và `Sprint-3-Schema.md` theo các delta d�
 ### 4.1. Bảng SQL đích
 
 Giữ kiểu SQL theo Schema: IDs/counters/duration `bigint`, thời gian UTC `datetime2(7)`, event SHA-256 `binary(32)`, display text `nvarchar`, concurrency `rowversion`.
+Các bảng vật lý của Statistics dùng schema mặc định `dbo` và tiền tố tên bảng
+`DES.`; ví dụ `[dbo].[DES.DeviceDailySnapshot]`.
 
 | Bảng | Grain/trách nhiệm và thay đổi cần làm |
 |---|---|
-| `SchemaMigration` | Migration ID/checksum/applied time; Worker chỉ kiểm tra version |
+| `DES.SchemaMigration` | Migration ID/checksum/applied time; Worker chỉ kiểm tra version |
 | `ProjectionDefinition` | PK name/version; immutable MappingVersion, OwnershipVersion, MetricSetVersion, CoverageStartAtUtc, TimeZoneId, lifecycle status |
 | `DeviceDimension` | PK company/device; current display metadata, timezone Việt Nam; `IsActive` nullable khi thiếu evidence |
 | `MetricDefinition` | Unique `(MetricSetVersion, MetricCode)`; không overwrite metric set cũ |
@@ -194,11 +196,8 @@ src/
     SqlServer/Stores/{SqlProjectionLeaseStore,SqlProjectionCheckpointStore}.cs
     SqlServer/Stores/{SqlStatisticsBatchWriter,SqlProjectionRebuildStore}.cs
     SqlServer/Stores/{SqlDurationRefreshStore,SqlReconciliationRequestStore}.cs
-    SqlServer/Migrations/001_CreateStatisticsSchema.sql
-    SqlServer/Migrations/002_CreateProjectionTables.sql
-    SqlServer/Migrations/003_CreateIndexesAndTableTypes.sql
-    SqlServer/Migrations/004_CreateProjectionProcedures.sql
-    SqlServer/Migrations/005_SeedMetricSetV1.sql
+    SqlServer/Migrations/001_CreateStatisticsSchema.sql ... 008_EnableBootstrapRunType.sql
+    SqlServer/Migrations/009_CreateDeviceEventStatisticsSchema.sql
     Metadata/ConfigurationDeviceMetadataResolver.cs
     Observability/{StatisticsMetrics,StatisticsHealthState,LoggingScopes}.cs
 
@@ -615,7 +614,7 @@ Mỗi phase dưới đây có mục tiêu, đầu vào, file chịu trách nhi�
 
 **Phụ thuộc:** P0 schema contract và P1 contexts. Logic metric/state được tích hợp ở P4-P6.
 
-**File chính:** `SqlServer/Migrations/001-005`, `SqlProjectionSession.cs`, `SqlProjectionLeaseStore.cs`, `SqlProjectionCheckpointStore.cs`, `ProjectionTvpMapper.cs`, `SqlRetryPolicy.cs`, `SqlSchemaVerifier.cs`, `Apply-SqlMigrations.ps1`.
+**File chính:** `SqlServer/Migrations/001-009`, `SqlProjectionSession.cs`, `SqlProjectionLeaseStore.cs`, `SqlProjectionCheckpointStore.cs`, `ProjectionTvpMapper.cs`, `SqlRetryPolicy.cs`, `SqlSchemaVerifier.cs`, `Apply-SqlMigrations.ps1`.
 
 #### Task P2.1 - Viết migrations cho toàn bộ statistics schema
 

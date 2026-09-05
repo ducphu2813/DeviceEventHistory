@@ -224,5 +224,5 @@ public sealed class SqlProjectionCheckpointStore(
         (reader.IsDBNull(ordinal) ? null : reader.GetString(ordinal)) == expected;
 
     private string Table(string tableName) =>
-        $"[{options.SchemaName}].[{tableName}]";
+        StatisticsSqlObjectNames.QualifiedTable(options.SchemaName, tableName);
 }

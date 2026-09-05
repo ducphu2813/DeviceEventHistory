@@ -49,4 +49,25 @@ public sealed class ProjectionTvpMapperTests
                 ProjectionEventDisposition.Ignored)
         ]));
     }
+
+    [Fact]
+    public void Hashes_composite_quality_identity_before_binary_persistence()
+    {
+        var mapper = new ProjectionTvpMapper();
+        var table = mapper.MapQualityContributions(
+        [
+            new QualityContribution(
+                new string('a', 64),
+                "source-document|parsed_with_warnings",
+                new DateOnly(2026, 9, 4),
+                1,
+                "raw_log",
+                "source-1",
+                "parsed_with_warnings",
+                DateTimeOffset.UtcNow)
+        ]);
+
+        Assert.Equal(typeof(byte[]), table.Columns["QualityIdentity"]!.DataType);
+        Assert.Equal(32, ((byte[])table.Rows[0]["QualityIdentity"]).Length);
+    }
 }

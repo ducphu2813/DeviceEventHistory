@@ -16,9 +16,11 @@ using DeviceEventStatistics.Application.Time;
 using DeviceEventStatistics.Application.Projection;
 using DeviceEventStatistics.Application.Persistence;
 using DeviceEventStatistics.Application.Reconciliation;
+using DeviceEventStatistics.Application.Observability;
 using DeviceEventStatistics.Domain.State;
 using DeviceEventStatistics.Worker.HealthChecks;
 using DeviceEventStatistics.Worker.Orchestration;
+using DeviceEventStatistics.Infrastructure.Observability;
 using Microsoft.Extensions.Options;
 using MongoDB.Driver;
 
@@ -161,6 +163,7 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IStatisticsBatchWriter, SqlStatisticsBatchWriter>();
         services.AddSingleton<IDurationRefreshStore, SqlDurationRefreshStore>();
         services.AddSingleton<ProjectionLeaseCoordinator>();
+        services.AddSingleton<GracefulShutdownCoordinator>();
         services.AddSingleton<StateDurationCalculator>();
         services.AddSingleton<IProjectionLeaseStore, SqlProjectionLeaseStore>();
         services.AddSingleton<IProjectionCheckpointStore, SqlProjectionCheckpointStore>();
@@ -174,6 +177,7 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IOperationalCleanupStore, SqlOperationalCleanupStore>();
         services.AddSingleton<ExactRangeRebuilder>();
         services.AddSingleton<ReconciliationCoordinator>();
+        services.AddSingleton<IProjectionOperationalSnapshotReader, SqlProjectionOperationalSnapshotReader>();
 
         return services;
     }
@@ -184,7 +188,13 @@ public static class ServiceCollectionExtensions
         services.AddHealthChecks()
             .AddCheck<StartupReadinessHealthCheck>(
                 "statistics_startup_readiness",
-                tags: ["ready", "startup"]);
+                tags: ["ready", "startup"])
+            .AddCheck<OperationalHealthCheck>(
+                "statistics_operational_health",
+                tags: ["ready", "operational"]);
+        services.AddSingleton<StatisticsHealthEvaluator>();
+        services.AddSingleton<OperationalHealthState>();
+        services.AddSingleton<IStatisticsTelemetry, StatisticsMetrics>();
         return services;
     }
 }

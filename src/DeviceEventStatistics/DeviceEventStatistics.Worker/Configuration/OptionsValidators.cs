@@ -352,7 +352,10 @@ public sealed class DatabaseSettingsOptionsValidator(IOptions<WorkerOptions> wor
         }
 
         ValidateConnection(options.ConnectionString, failures);
-        ValidateEnvironmentVariable(options.ConnectionStringEnvironmentVariable, failures);
+        ValidateEnvironmentVariable(
+            options.ConnectionString,
+            options.ConnectionStringEnvironmentVariable,
+            failures);
         ValidateDatabaseName(options.DatabaseName, failures);
         ValidateCollectionName(options.HistoryCollection, failures);
 
@@ -374,7 +377,10 @@ public sealed class DatabaseSettingsOptionsValidator(IOptions<WorkerOptions> wor
         }
 
         ValidateConnection(options.ConnectionString, failures);
-        ValidateEnvironmentVariable(options.ConnectionStringEnvironmentVariable, failures);
+        ValidateEnvironmentVariable(
+            options.ConnectionString,
+            options.ConnectionStringEnvironmentVariable,
+            failures);
         ValidateDatabaseName(options.DatabaseName, failures);
         ValidateSqlIdentifier(options.SchemaName, ConfigurationValidationErrors.SchemaNameInvalid, failures);
         if (options.CommandTimeoutSeconds <= 0) failures.Add(ConfigurationValidationErrors.CommandTimeoutPositive);
@@ -385,14 +391,24 @@ public sealed class DatabaseSettingsOptionsValidator(IOptions<WorkerOptions> wor
         if (string.IsNullOrWhiteSpace(value)) failures.Add(ConfigurationValidationErrors.ConnectionStringRequired);
     }
 
-    private static void ValidateEnvironmentVariable(string? value, ICollection<string> failures)
+    private static void ValidateEnvironmentVariable(
+        string? connectionString,
+        string? value,
+        ICollection<string> failures)
     {
-        if (string.IsNullOrWhiteSpace(value)) failures.Add(ConfigurationValidationErrors.EnvironmentVariableRequired);
+        if (string.IsNullOrWhiteSpace(connectionString) && string.IsNullOrWhiteSpace(value))
+        {
+            failures.Add(ConfigurationValidationErrors.EnvironmentVariableRequired);
+        }
     }
 
     private static void ValidateDatabaseName(string? value, ICollection<string> failures)
     {
-        ValidateSqlIdentifier(value, ConfigurationValidationErrors.DatabaseNameInvalid, failures);
+        if (string.IsNullOrWhiteSpace(value) ||
+            value.Any(character => !(char.IsLetterOrDigit(character) || character is '_' or '-')))
+        {
+            failures.Add(ConfigurationValidationErrors.DatabaseNameInvalid);
+        }
     }
 
     private static void ValidateCollectionName(string? value, ICollection<string> failures)

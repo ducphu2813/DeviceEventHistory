@@ -2,9 +2,26 @@
 
 ## SQL schema
 
-Apply additive SQL migrations with a deployment identity before enabling the
-Statistics Worker. The runtime identity only verifies the schema and latest
-migration; it does not create or alter SQL objects.
+The Statistics Worker uses the default `dbo` schema. Its table names use the
+`DES.` convention, for example `[dbo].[DES.DeviceDailySnapshot]`.
+
+For a direct fresh installation through SSMS or Azure Data Studio, open and execute
+the standalone script below in `UA-REPORTING-DB`:
+
+```text
+src/DeviceEventStatistics/DeviceEventStatistics.Infrastructure/SqlServer/Migrations/009_CreateDeviceEventStatisticsSchema.sql
+```
+
+The script creates the complete Statistics schema in the currently selected
+database. It does not contain `USE`, `DROP`, or rename statements, so it does
+not depend on a database name and does not modify legacy tables. Do not run it
+while another Statistics Worker instance is processing the database. The file
+is a create-only bootstrap script; it is not an in-place schema upgrade script.
+
+The older `001–008` files remain versioned migration history. Automated
+deployment may still use the migration runner below; the runtime identity only
+verifies the schema and latest migration, and never creates or alters SQL
+objects.
 
 ```powershell
 .\Apply-SqlMigrations.ps1 `
@@ -34,6 +51,23 @@ missing persisted timestamp separately.
 MongoDB removes TTL-eligible documents asynchronously; the script does not
 promise deletion at an exact second. Apply this with a deployment-owned
 identity after UAT confirms the TTL/index contract.
+
+## Observability and shutdown
+
+The worker registers startup and operational health checks with the host health
+check service. The operational state reports idle/caught-up, backlog warning
+at 12 hours, SLO breach at 24 hours, dependency failure, lease loss,
+retention risk, unrecoverable coverage and graceful-drain state. These are
+pipeline signals, not Sprint 4 device health scoring.
+
+Metrics use the `DeviceEventStatistics.Worker` `System.Diagnostics.Metrics`
+meter. Attach the deployment exporter or collector at the host boundary;
+vendor-specific exporter dependencies are not embedded in the worker. Event,
+device and run identities are excluded from metric labels.
+
+Set `DeviceEventStatistics__ShutdownTimeout` to the approved drain budget. A
+shutdown cancels only work that has not committed, preserves the checkpoint,
+and releases the projection lease after the active bounded operation exits.
 
 ## One-shot modes
 

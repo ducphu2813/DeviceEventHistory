@@ -1,3 +1,5 @@
+using System.Diagnostics;
+using DeviceEventStatistics.Application.Observability;
 using DeviceEventStatistics.Application.Projection;
 using DeviceEventStatistics.Domain.Common;
 using DeviceEventStatistics.Worker.Configuration;
@@ -11,6 +13,8 @@ public sealed class IncrementalProjectionHostedService(
     StartupReadinessBarrier readinessBarrier,
     IOptions<WorkerOptions> workerOptions,
     IOptions<ProjectionOptions> projectionOptions,
+    IStatisticsTelemetry telemetry,
+    GracefulShutdownCoordinator shutdownCoordinator,
     ILogger<IncrementalProjectionHostedService> logger) : BackgroundService
 {
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -22,6 +26,14 @@ public sealed class IncrementalProjectionHostedService(
         {
             return;
         }
+
+        using var logScope = logger.BeginScope(new Dictionary<string, object>
+        {
+            ["WorkerId"] = worker.WorkerId,
+            ["ProjectionName"] = settings.Name,
+            ["ProjectionVersion"] = settings.ProjectionVersion,
+            ["Mode"] = settings.Mode.ToString()
+        });
 
         while (!stoppingToken.IsCancellationRequested)
         {
@@ -65,7 +77,11 @@ public sealed class IncrementalProjectionHostedService(
             }
             catch (Exception exception)
             {
+                telemetry.RecordBatchFailed(settings.Mode.ToString());
                 logger.LogError(exception, StatisticsContractConstants.Messages.MSG_LOG_PROJECTION_FAILED);
+                logger.LogWarning(
+                    StatisticsContractConstants.Messages.MSG_LOG_BATCH_RETRY,
+                    settings.Mode);
                 await DelayAsync(settings.PollInterval, stoppingToken);
             }
             finally
@@ -100,7 +116,19 @@ public sealed class IncrementalProjectionHostedService(
 
         while (!cancellationToken.IsCancellationRequested)
         {
-            var result = await pipeline.ExecutePageAsync(projectionOptions, lease, cancellationToken);
+            if (!shutdownCoordinator.TryBeginOperation(out var operation))
+            {
+                return;
+            }
+
+            ProjectionPageResult result;
+            var stopwatch = Stopwatch.StartNew();
+            using (operation)
+            {
+                result = await pipeline.ExecutePageAsync(projectionOptions, lease, cancellationToken);
+            }
+
+            telemetry.RecordBatchCommitted(settings.Mode.ToString(), result, stopwatch.Elapsed);
             logger.LogInformation(
                 StatisticsContractConstants.Messages.MSG_LOG_PROJECTION_BATCH_COMMITTED,
                 result.ReadEventCount,

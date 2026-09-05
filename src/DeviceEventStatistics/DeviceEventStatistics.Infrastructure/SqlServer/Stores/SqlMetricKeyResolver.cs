@@ -26,7 +26,7 @@ public sealed class SqlMetricKeyResolver(
             .ToArray();
         command.CommandText = $"""
             SELECT [MetricCode], [MetricKey]
-            FROM [{options.SchemaName}].[MetricDefinition]
+            FROM {StatisticsSqlObjectNames.QualifiedTable(options.SchemaName, "MetricDefinition")}
             WHERE [MetricSetVersion] = @metricSetVersion
               AND [MetricCode] IN ({string.Join(',', parameterNames)});
             """;

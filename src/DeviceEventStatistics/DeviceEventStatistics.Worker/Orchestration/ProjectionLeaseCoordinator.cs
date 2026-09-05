@@ -1,3 +1,4 @@
+using DeviceEventStatistics.Application.Observability;
 using DeviceEventStatistics.Application.Projection;
 using DeviceEventStatistics.Domain.Common;
 using DeviceEventStatistics.Worker.Configuration;
@@ -8,7 +9,9 @@ namespace DeviceEventStatistics.Worker.Orchestration;
 public sealed class ProjectionLeaseCoordinator(
     IProjectionLeaseStore leaseStore,
     IOptions<WorkerOptions> workerOptions,
-    IOptions<ProjectionOptions> projectionOptions)
+    IOptions<ProjectionOptions> projectionOptions,
+    IStatisticsTelemetry telemetry,
+    ILogger<ProjectionLeaseCoordinator> logger)
 {
     private readonly Lock gate = new();
     private ProjectionLeaseToken? currentLease;
@@ -43,11 +46,23 @@ public sealed class ProjectionLeaseCoordinator(
             options.Name,
             options.ProjectionVersion,
             StatisticsContractConstants.DefaultPartitionKey);
-        var result = await leaseStore.AcquireAsync(
-            identity,
-            workerOptions.Value.WorkerId,
-            options.LeaseDuration,
-            cancellationToken);
+        LeaseAcquireResult result;
+        try
+        {
+            result = await leaseStore.AcquireAsync(
+                identity,
+                workerOptions.Value.WorkerId,
+                options.LeaseDuration,
+                cancellationToken);
+        }
+        catch (InvalidOperationException exception) when (
+            string.Equals(
+                exception.Message,
+                StatisticsContractConstants.Messages.MSG_SQL_LEASE_APPLOCK_UNAVAILABLE,
+                StringComparison.Ordinal))
+        {
+            return new LeaseAcquireResult(false, null);
+        }
         if (!result.Acquired || result.Lease is null)
         {
             return result;
@@ -59,6 +74,8 @@ public sealed class ProjectionLeaseCoordinator(
             leaseLostSource = new CancellationTokenSource();
             currentLease = result.Lease;
         }
+
+        telemetry.RecordLeaseTransition(StatisticsContractConstants.Telemetry.LeaseAcquired);
 
         return result;
     }
@@ -77,6 +94,10 @@ public sealed class ProjectionLeaseCoordinator(
             cancellationToken);
         if (renewed is null)
         {
+            telemetry.RecordLeaseTransition(StatisticsContractConstants.Telemetry.LeaseLost);
+            logger.LogWarning(
+                StatisticsContractConstants.Messages.MSG_LOG_LEASE_LOST,
+                lease.Epoch);
             SignalLeaseLost();
             return false;
         }
@@ -88,6 +109,8 @@ public sealed class ProjectionLeaseCoordinator(
                 currentLease = renewed;
             }
         }
+
+        telemetry.RecordLeaseTransition(StatisticsContractConstants.Telemetry.LeaseRenewed);
 
         return true;
     }
@@ -105,6 +128,11 @@ public sealed class ProjectionLeaseCoordinator(
             currentLease = null;
             leaseLostSource?.Dispose();
             leaseLostSource = null;
+        }
+
+        if (lease is not null)
+        {
+            telemetry.RecordLeaseTransition(StatisticsContractConstants.Telemetry.LeaseReleased);
         }
     }
 

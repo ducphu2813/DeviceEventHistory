@@ -1,3 +1,5 @@
+using System.Diagnostics;
+using DeviceEventStatistics.Application.Observability;
 using DeviceEventStatistics.Application.Reconciliation;
 using DeviceEventStatistics.Application.Projection;
 using DeviceEventStatistics.Application.Time;
@@ -19,6 +21,8 @@ public sealed class ReconciliationHostedService(
     IOptions<RetentionOptions> retentionOptions,
     TimeProvider timeProvider,
     LocalStatisticsDateResolver dateResolver,
+    IStatisticsTelemetry telemetry,
+    GracefulShutdownCoordinator shutdownCoordinator,
     ILogger<ReconciliationHostedService> logger) : BackgroundService
 {
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -30,6 +34,14 @@ public sealed class ReconciliationHostedService(
         {
             return;
         }
+
+        using var logScope = logger.BeginScope(new Dictionary<string, object>
+        {
+            ["WorkerId"] = workerOptions.Value.WorkerId,
+            ["ProjectionName"] = projectionOptions.Value.Name,
+            ["ProjectionVersion"] = projectionOptions.Value.ProjectionVersion,
+            ["Mode"] = projectionOptions.Value.Mode.ToString()
+        });
 
         using var timer = new PeriodicTimer(reconciliationOptions.Value.ScheduleInterval);
         do
@@ -46,59 +58,72 @@ public sealed class ReconciliationHostedService(
             settings.Name,
             settings.ProjectionVersion,
             StatisticsContractConstants.DefaultPartitionKey);
-        var lease = leaseCoordinator.CurrentLease;
-        var acquiredHere = false;
-        try
-        {
-            if (lease is null)
-            {
-                var acquired = await leaseCoordinator.TryAcquireAsync(cancellationToken);
-                if (!acquired.Acquired || acquired.Lease is null)
-                {
-                    return;
-                }
-
-                lease = acquired.Lease;
-                acquiredHere = true;
-            }
-
-            await EnqueueRollingRequestsAsync(identity, lease, cancellationToken);
-            var options = new ReconciliationExecutionOptions(
-                settings.MappingVersion,
-                settings.MetricSetVersion,
-                settings.LeaseDuration,
-                settings.RetryMinDelay,
-                reconciliationOptions.Value.MaxAttempts,
-                settings.BatchSize,
-                reconciliationOptions.Value.MaxRangeDays,
-                reconciliationOptions.Value.MaxRequestsPerRun,
-                TimeSpan.FromDays(retentionOptions.Value.MongoHistoryRetentionDays),
-                TimeSpan.FromDays(retentionOptions.Value.MinimumHistoryHeadroomDays),
-                dateResolver.Resolve(timeProvider.GetUtcNow()).StatisticsDate);
-            var result = await coordinator.RunOnceAsync(identity, lease, options, cancellationToken);
-            if (result.CompletedCount > 0 || result.RetriedCount > 0 || result.FailedCount > 0)
-            {
-                logger.LogInformation(
-                    StatisticsContractConstants.Messages.MSG_LOG_RECONCILIATION_CYCLE,
-                    result.CompletedCount,
-                    result.RetriedCount,
-                    result.FailedCount,
-                    result.CompletedAtUtc);
-            }
-        }
-        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        if (!shutdownCoordinator.TryBeginOperation(out var operation))
         {
             return;
         }
-        catch (Exception exception)
+
+        using (operation)
         {
-            logger.LogError(exception, StatisticsContractConstants.Messages.MSG_RECONCILIATION_RUN_FAILED);
-        }
-        finally
-        {
-            if (acquiredHere)
+            try
             {
-                await leaseCoordinator.ReleaseAsync(CancellationToken.None);
+                var lease = leaseCoordinator.CurrentLease;
+                var acquiredHere = false;
+                try
+                {
+                if (lease is null)
+                {
+                    var acquired = await leaseCoordinator.TryAcquireAsync(cancellationToken);
+                    if (!acquired.Acquired || acquired.Lease is null)
+                    {
+                        return;
+                    }
+
+                    lease = acquired.Lease;
+                    acquiredHere = true;
+                }
+
+                var stopwatch = Stopwatch.StartNew();
+                await EnqueueRollingRequestsAsync(identity, lease, cancellationToken);
+                var options = new ReconciliationExecutionOptions(
+                    settings.MappingVersion,
+                    settings.MetricSetVersion,
+                    settings.LeaseDuration,
+                    settings.RetryMinDelay,
+                    reconciliationOptions.Value.MaxAttempts,
+                    settings.BatchSize,
+                    reconciliationOptions.Value.MaxRangeDays,
+                    reconciliationOptions.Value.MaxRequestsPerRun,
+                    TimeSpan.FromDays(retentionOptions.Value.MongoHistoryRetentionDays),
+                    TimeSpan.FromDays(retentionOptions.Value.MinimumHistoryHeadroomDays),
+                    dateResolver.Resolve(timeProvider.GetUtcNow()).StatisticsDate);
+                var result = await coordinator.RunOnceAsync(identity, lease, options, cancellationToken);
+                telemetry.RecordReconciliation(result, stopwatch.Elapsed);
+                if (result.CompletedCount > 0 || result.RetriedCount > 0 || result.FailedCount > 0)
+                {
+                    logger.LogInformation(
+                        StatisticsContractConstants.Messages.MSG_LOG_RECONCILIATION_CYCLE,
+                        result.CompletedCount,
+                        result.RetriedCount,
+                        result.FailedCount,
+                        result.CompletedAtUtc);
+                }
+                }
+                finally
+                {
+                    if (acquiredHere)
+                    {
+                        await leaseCoordinator.ReleaseAsync(CancellationToken.None);
+                    }
+                }
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                return;
+            }
+            catch (Exception exception)
+            {
+                logger.LogError(exception, StatisticsContractConstants.Messages.MSG_RECONCILIATION_RUN_FAILED);
             }
         }
     }

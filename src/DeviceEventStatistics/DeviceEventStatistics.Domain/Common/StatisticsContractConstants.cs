@@ -23,6 +23,26 @@ public static class StatisticsContractConstants
         public const string Lost = "STAT-LEASE-LOST";
     }
 
+    public static class Telemetry
+    {
+        public const string MeterName = "DeviceEventStatistics.Worker";
+        public const string LeaseAcquired = "acquired";
+        public const string LeaseRenewed = "renewed";
+        public const string LeaseLost = "lost";
+        public const string LeaseReleased = "released";
+    }
+
+    public static class HealthReasons
+    {
+        public const string StartupOrDependencyFailure = "startup_or_dependency_failure";
+        public const string Draining = "draining";
+        public const string LeaseNotHeld = "lease_not_held";
+        public const string UnrecoverableCoverage = "unrecoverable_coverage";
+        public const string LagSloBreached = "lag_slo_breached";
+        public const string LagOrRetentionWarning = "lag_or_retention_warning";
+        public const string CaughtUp = "caught_up";
+    }
+
     public static class StartupErrors
     {
         public const string Cancelled = "STAT-STARTUP-CANCELLED";
@@ -127,6 +147,20 @@ public static class StatisticsContractConstants
             "Statistics manual mode skipped because the projection definition is already ready. ProjectionVersion={ProjectionVersion}.";
         public const string MSG_LOG_RETENTION_CLEANUP =
             "Statistics operational cleanup completed. DeletedStagingRows={DeletedStagingRows}, DeletedProjectionRuns={DeletedProjectionRuns}.";
+        public const string MSG_LOG_HEALTH_STATUS_CHANGED =
+            "Statistics operational health changed. Status={Status}, Reason={Reason}, IncrementalLag={IncrementalLag}, PendingRequestAge={PendingRequestAge}, RetentionHeadroom={RetentionHeadroom}.";
+        public const string MSG_LOG_HEALTH_EVALUATION_FAILED =
+            "Statistics operational health evaluation failed.";
+        public const string MSG_LOG_BATCH_RETRY =
+            "Statistics projection will retry after a processing failure. Mode={Mode}.";
+        public const string MSG_LOG_LEASE_LOST =
+            "Statistics projection lease was lost; current work is being cancelled. Epoch={Epoch}.";
+        public const string MSG_LOG_SHUTDOWN_DRAIN_STARTED =
+            "Statistics graceful shutdown drain started. ActiveOperations={ActiveOperations}.";
+        public const string MSG_LOG_SHUTDOWN_DRAIN_COMPLETED =
+            "Statistics graceful shutdown drain completed. ActiveOperations={ActiveOperations}.";
+        public const string MSG_LOG_SHUTDOWN_DRAIN_TIMEOUT =
+            "Statistics graceful shutdown drain timed out. ActiveOperations={ActiveOperations}. Uncommitted work will be recovered after restart.";
         public const string MSG_LOG_PROJECTION_LEASE_ACQUIRED =
             "Statistics projection lease acquired. Epoch={Epoch}, ExpiresAtUtc={ExpiresAtUtc}.";
         public const string MSG_LOG_PROJECTION_LEASE_UNAVAILABLE =
@@ -145,6 +179,12 @@ public static class StatisticsContractConstants
         public const string MSG_HEALTH_READY = "Startup preflight completed.";
         public const string MSG_HEALTH_NOT_READY =
             "Statistics worker is not ready. FailureCode={0}";
+        public const string MSG_HEALTH_OPERATIONAL_NOT_EVALUATED =
+            "Statistics operational health has not been evaluated yet.";
+        public const string MSG_HEALTH_OPERATIONAL_DEPENDENCY_FAILED =
+            "Statistics operational dependency health check failed.";
+        public const string MSG_HEALTH_OPERATIONAL_STATUS =
+            "Statistics operational health status. Reason={0}";
         public const string MSG_LOG_WORKER_DISABLED =
             "Statistics worker is disabled; no projection loop will be started.";
         public const string MSG_LOG_HOST_STOPPING_DISABLED =

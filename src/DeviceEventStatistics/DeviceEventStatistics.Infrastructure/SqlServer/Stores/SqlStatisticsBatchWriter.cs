@@ -54,18 +54,24 @@ public sealed class SqlStatisticsBatchWriter(
             session,
             batch.Identity,
             batch.MetricContributions,
+            batch.ProcessedEvents,
+            newEventIds,
             batch.Lease,
             cancellationToken);
         affectedRows += await operations.UpsertDeviceSummariesAsync(
             session,
             batch.Identity,
             batch.DeviceSummaries,
+            batch.ProcessedEvents,
+            newEventIds,
             batch.Lease,
             cancellationToken);
         affectedRows += await operations.UpsertQualityDailyAsync(
             session,
             batch.Identity,
             batch.QualityContributions,
+            batch.ProcessedEvents,
+            newEventIds,
             batch.Lease,
             cancellationToken);
         var insertedFailureCount = await operations.InsertFailuresAsync(

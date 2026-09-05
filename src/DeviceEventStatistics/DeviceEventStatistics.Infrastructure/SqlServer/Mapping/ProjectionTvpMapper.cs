@@ -1,4 +1,6 @@
 using System.Data;
+using System.Security.Cryptography;
+using System.Text;
 using DeviceEventStatistics.Application.Persistence;
 using DeviceEventStatistics.Domain.Common;
 
@@ -30,6 +32,11 @@ public sealed class ProjectionTvpMapper
                     value.Outcome.ToContractValue()
                 };
             });
+
+    public DataTable MapAdmittedProcessedEvents(
+        IEnumerable<ProcessedEventInput> values,
+        IReadOnlySet<string> admittedEventIds) =>
+        MapProcessedEvents(values.Where(value => admittedEventIds.Contains(value.EventId)));
 
     public DataTable MapMetricContributions(IEnumerable<MetricContribution> values) =>
         CreateTable(
@@ -170,7 +177,7 @@ public sealed class ProjectionTvpMapper
             values,
             value => new object?[]
             {
-                value.EventId.ToEventIdBytes(), value.QualityIdentity.ToEventIdBytes(), value.StatisticsDate.ToDateTime(),
+                value.EventId.ToEventIdBytes(), value.QualityIdentity.ToQualityIdentityBytes(), value.StatisticsDate.ToDateTime(),
                 value.CompanyId, value.SourceKind, value.SourceId, value.QualityCode,
                 value.SeenAtUtc.UtcDateTime
             });
@@ -238,6 +245,9 @@ internal static class ProjectionTvpValueExtensions
 
         return Convert.FromHexString(value);
     }
+
+    public static byte[] ToQualityIdentityBytes(this string value) =>
+        SHA256.HashData(Encoding.UTF8.GetBytes(value));
 
     public static DateTime ToDateTime(this DateOnly value) =>
         value.ToDateTime(TimeOnly.MinValue, DateTimeKind.Unspecified);

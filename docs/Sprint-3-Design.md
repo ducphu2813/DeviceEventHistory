@@ -462,8 +462,8 @@ Recommended implementation:
 - transaction-scoped repository/stored procedure;
 - insert new processed IDs và capture inserted IDs;
 - chỉ aggregate contributions của IDs vừa insert;
-- group deltas theo daily primary key;
-- `UPDATE` existing rows, sau đó `INSERT` missing rows với unique-key protection;
+- group deltas theo daily business identity;
+- `UPDATE` existing rows, sau đó `INSERT` missing rows dưới transaction-scoped application lock;
 - update checkpoint cuối transaction.
 
 Correctness invariant:
@@ -637,7 +637,7 @@ Scheduling flow:
 
 ```text
 startup
-    -> read pending requests from dbo.ReconciliationRequest
+    -> read pending requests from [dbo].[DES.ReconciliationRequest]
     -> read last successful rolling reconciliation run
     -> determine missed/required date windows
     -> wait until next configured schedule with cancellable delay
@@ -1138,7 +1138,7 @@ Rollback:
 - SQL database/schema deployment thực tế và migration owner (`dbo` schema).
 - Cấu hình MongoDB Bounded Overlap Window (mặc định 5 phút) kết hợp `ProcessedEvent` để loại bỏ commit skew.
 - Quy tắc kiểm tra Fencing Token (`LeaseEpoch`) trên `ProjectionCheckpoint` trong mọi transaction ghi SQL.
-- Lược đồ bảng `dbo.ReconciliationRequest` lưu trữ bền vững và quy tắc forward propagation cho multi-day state transition.
+- Lược đồ bảng `[dbo].[DES.ReconciliationRequest]` lưu trữ bền vững và quy tắc forward propagation cho multi-day state transition.
 - Authoritative timezone/device metadata source và cơ chế audit/trigger reconcile khi timezone thay đổi.
 - Initial metrics + source ownership sau Sprint 2 UAT.
 - Health Rule V1 hoặc quyết định defer score sang sub-phase sau daily facts.

@@ -13,6 +13,7 @@ public sealed class DurationRefreshHostedService(
     IOptions<ProjectionOptions> projectionOptions,
     IOptions<StateOptions> stateOptions,
     TimeProvider timeProvider,
+    GracefulShutdownCoordinator shutdownCoordinator,
     ILogger<DurationRefreshHostedService> logger) : BackgroundService
 {
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -36,6 +37,13 @@ public sealed class DurationRefreshHostedService(
 
             try
             {
+                if (!shutdownCoordinator.TryBeginOperation(out var operation))
+                {
+                    return;
+                }
+
+                using (operation)
+                {
                 var affectedRows = await refreshStore.RefreshAsync(
                     lease.Identity,
                     lease,
@@ -47,6 +55,7 @@ public sealed class DurationRefreshHostedService(
                     logger.LogInformation(
                         StatisticsContractConstants.Messages.MSG_LOG_STATE_REFRESH_COMPLETED,
                         affectedRows);
+                }
                 }
             }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)

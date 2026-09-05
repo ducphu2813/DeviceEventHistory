@@ -17,6 +17,8 @@ builder.Services.AddHostedService<DurationRefreshHostedService>();
 builder.Services.AddHostedService<ReconciliationHostedService>();
 builder.Services.AddHostedService<ManualProjectionHostedService>();
 builder.Services.AddHostedService<RetentionCleanupHostedService>();
+builder.Services.AddHostedService<OperationalHealthHostedService>();
+builder.Services.AddHostedService<GracefulShutdownHostedService>();
 
 var host = builder.Build();
 

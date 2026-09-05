@@ -3,18 +3,41 @@
 ## Preflight
 
 1. Confirm the Statistics SQL target is `UA-REPORTING-DB` with schema `dbo`.
-2. Apply SQL migrations with the deployment identity and verify the latest
-   migration through the worker startup preflight.
-3. Verify Mongo connectivity, the history collection, the unique event index
+2. Select the target database in SSMS or Azure Data Studio, then execute
+   `009_CreateDeviceEventStatisticsSchema.sql`. It creates the `DES.*`
+   Statistics tables under `dbo` without selecting a fixed database and
+   without modifying legacy tables. Use it for a fresh create-only bootstrap,
+   not as an in-place schema upgrade.
+3. Verify the latest schema through the worker startup preflight.
+4. Verify Mongo connectivity, the history collection, the unique event index
    and the Statistics cursor index.
-4. Check the projection definition, checkpoint, pending reconciliation requests
+5. Check the projection definition, checkpoint, pending reconciliation requests
    and coverage before changing a mode.
-5. Keep the Statistics worker disabled while applying schema changes or
+6. Keep the Statistics worker disabled while applying schema changes or
    enabling history TTL.
 
 The worker never creates SQL schema or changes the History Worker checkpoint.
 Connection strings and credentials must be supplied through local environment
 configuration or deployment secrets.
+
+## Phase 8 operational signals
+
+The worker registers startup and operational health checks with the host health
+check service. The operational check distinguishes idle/caught-up, degraded
+lag or pending work, dependency/lease failure, retention risk and
+unrecoverable coverage. The default lag thresholds are 12 hours for warning
+and 24 hours for an SLO breach. These signals describe pipeline health only;
+they are not Sprint 4 device health scoring.
+
+Metrics are emitted through the `DeviceEventStatistics.Worker`
+`System.Diagnostics.Metrics` meter. A deployment may attach its exporter at
+the host boundary. Event, device and run identities are intentionally not
+metric labels.
+
+During shutdown the worker stops admitting new bounded operations, waits up to
+`DeviceEventStatistics:ShutdownTimeout` for active SQL work, and releases the
+projection lease afterwards. Cancelled work keeps its previous checkpoint and
+remains recoverable after restart.
 
 ## Normal incremental operation
 

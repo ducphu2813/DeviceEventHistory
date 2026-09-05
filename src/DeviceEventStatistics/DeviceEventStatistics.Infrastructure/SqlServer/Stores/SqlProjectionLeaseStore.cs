@@ -235,7 +235,7 @@ public sealed class SqlProjectionLeaseStore(
         new(DateTime.SpecifyKind(value, DateTimeKind.Utc));
 
     private string Table(string tableName) =>
-        $"[{options.SchemaName}].[{tableName}]";
+        StatisticsSqlObjectNames.QualifiedTable(options.SchemaName, tableName);
 
     private sealed record LeaseState(string? Owner, DateTimeOffset? ExpiresAtUtc, long Epoch, bool IsActive);
 }

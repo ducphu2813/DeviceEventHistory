@@ -23,6 +23,7 @@ public sealed class ManualProjectionHostedService(
     IOptions<MetadataOptions> metadataOptions,
     TimeProvider timeProvider,
     LocalStatisticsDateResolver dateResolver,
+    GracefulShutdownCoordinator shutdownCoordinator,
     ILogger<ManualProjectionHostedService> logger) : BackgroundService
 {
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -35,6 +36,14 @@ public sealed class ManualProjectionHostedService(
             return;
         }
 
+        using var logScope = logger.BeginScope(new Dictionary<string, object>
+        {
+            ["WorkerId"] = workerOptions.Value.WorkerId,
+            ["ProjectionName"] = settings.Name,
+            ["ProjectionVersion"] = settings.ProjectionVersion,
+            ["Mode"] = settings.Mode.ToString()
+        });
+
         var leaseResult = await leaseCoordinator.TryAcquireAsync(stoppingToken);
         if (!leaseResult.Acquired || leaseResult.Lease is null)
         {
@@ -42,6 +51,14 @@ public sealed class ManualProjectionHostedService(
             return;
         }
 
+        if (!shutdownCoordinator.TryBeginOperation(out var operation))
+        {
+            await leaseCoordinator.ReleaseAsync(CancellationToken.None);
+            applicationLifetime.StopApplication();
+            return;
+        }
+
+        using (operation)
         try
         {
             var range = ResolveRange(settings);

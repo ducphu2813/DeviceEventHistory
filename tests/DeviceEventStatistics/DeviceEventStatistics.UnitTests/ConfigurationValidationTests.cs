@@ -59,4 +59,31 @@ public sealed class ConfigurationValidationTests
         Assert.False(result.Succeeded);
         Assert.Contains("STAT-CONFIG-RETENTION-HEADROOM-INVALID", result.FailureMessage);
     }
+
+    [Fact]
+    public void Explicit_connection_strings_allow_empty_environment_variable_names()
+    {
+        var worker = Options.Create(new WorkerOptions { Enabled = true });
+        var options = new DatabaseSettingsOptions
+        {
+            MongoDb = new MongoHistoryDatabaseOptions
+            {
+                ConnectionString = "mongodb://localhost:27017",
+                ConnectionStringEnvironmentVariable = string.Empty
+            },
+            SqlServer = new SqlStatisticsDatabaseOptions
+            {
+                ConnectionString = "Server=localhost;Database=UA-REPORTING-DB;",
+                ConnectionStringEnvironmentVariable = string.Empty,
+                DatabaseName = "UA-REPORTING-DB",
+                SchemaName = "dbo"
+            }
+        };
+
+        var result = new DatabaseSettingsOptionsValidator(worker).Validate(
+            Options.DefaultName,
+            options);
+
+        Assert.True(result.Succeeded);
+    }
 }
