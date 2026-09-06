@@ -3,17 +3,15 @@
 ## Preflight
 
 1. Confirm the Statistics SQL target is `UA-REPORTING-DB` with schema `dbo`.
-2. Select the target database in SSMS or Azure Data Studio, then execute
-   `009_CreateDeviceEventStatisticsSchema.sql`. It creates the `DES.*`
-   Statistics tables under `dbo` without selecting a fixed database and
-   without modifying legacy tables. Use it for a fresh create-only bootstrap,
-   not as an in-place schema upgrade.
-3. For an existing 009 database, run the migration runner to apply
-   `010_AddDurableAuditCheckpoint.sql`,
-   `011_AddScopedProcessedEventContract.sql`, and
-   `012_FixMetricRegistryV1.sql`. They add durable audit fields
-   plus nullable `ProcessedEvent` device scope and TVP V2; no existing
-   processed rows are rewritten.
+2. If the database contains old Statistics objects, stop the Statistics Worker,
+   select the target database in SSMS or Azure Data Studio, and execute
+   `010_CleanupDeviceEventStatisticsSchema.sql`. This is a destructive,
+   Statistics-owned cleanup only; it does not select a database and does not
+   touch History, HangFire or ERP tables.
+3. Select the target database and execute
+   `009_CreateDeviceEventStatisticsSchema.sql`. It is the only create/bootstrap
+   script and creates all current `DES.*` tables, types, indexes and metric seed
+   under `dbo`. It is idempotent and does not modify legacy tables.
 4. Verify the latest schema through the worker startup preflight.
 5. Verify Mongo connectivity, the history collection, the unique event index,
    the global Statistics cursor index and the scoped cursor index.
@@ -21,6 +19,31 @@
    and coverage before changing a mode.
 7. Keep the Statistics worker disabled while applying schema changes or
    enabling history TTL.
+
+## Dependency and schema verification (Phase F7)
+
+The Statistics and History infrastructure projects pin `MongoDB.Driver` to
+the first version in the audited line that resolves both compression
+dependencies without the known advisories: `3.9.0` resolves
+`SharpCompress >= 0.48.1` and `Snappier >= 1.3.1`. Re-run
+`dotnet list DeviceEventStatistics.sln package --include-transitive --vulnerable`
+and the equivalent History command after every driver change. Do not suppress
+NU1902/NU1903; a new warning requires a package upgrade or an approved risk
+disposition before deployment.
+
+For a fresh database, select the target database in SSMS and execute
+`009_CreateDeviceEventStatisticsSchema.sql` twice. The second execution is
+expected to be a no-op for existing objects and seed rows. For an intentional
+Statistics reset, execute `010_CleanupDeviceEventStatisticsSchema.sql` once,
+then run 009. The cleanup is the only destructive script and must never be
+run against a database whose Statistics evidence must be retained.
+
+The disposable Phase F7 smoke verification exercised 009 twice with a
+sentinel `DeviceDimension` row. Evidence: 22 `DES.*` tables, 22 indexes, 14
+metric rows, 4 durable audit columns, the scoped V2 type and index, and one
+disabled `device_error` metric after recreation. The generated test database
+was removed after the successful run; no development application database was
+reset.
 
 For a new projection definition, set `ResumeFromStoredDefinition=false` and
 provide an explicit `CoverageStartAtUtc`. After the definition has been

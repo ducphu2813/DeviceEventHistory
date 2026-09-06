@@ -89,6 +89,24 @@ public sealed class MongoIndexInitializer(
             CompoundDescendingIndex(AppConst.MongoDb.HistoryTagTimelineIndexName, "facts.tagRead.tagId", "timelineAtUtc", V2Filter("facts.tagRead.tagId")),
             CompoundDescendingIndex(AppConst.MongoDb.HistoryParseStatusReceivedAtV2IndexName, "parse.status", "receivedAtUtc", V2Filter("parse.status")),
 
+            // Statistics reads advance by persisted-event cursor, optionally scoped to a company and device.
+            CompoundIndex(
+                AppConst.MongoDb.HistoryStatisticsCursorIndexName,
+                new BsonDocument
+                {
+                    { "persistedAtUtc", 1 },
+                    { "eventId", 1 }
+                }),
+            CompoundIndex(
+                AppConst.MongoDb.HistoryStatisticsScopedCursorIndexName,
+                new BsonDocument
+                {
+                    { "companyId", 1 },
+                    { "device.id", 1 },
+                    { "persistedAtUtc", 1 },
+                    { "eventId", 1 }
+                }),
+
         }.ToList();
 
         models.AddRange(GetFileTraceMigrationIndexes(

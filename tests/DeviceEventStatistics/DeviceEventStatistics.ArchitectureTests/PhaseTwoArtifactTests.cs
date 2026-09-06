@@ -5,7 +5,7 @@ namespace DeviceEventStatistics.ArchitectureTests;
 public sealed class PhaseTwoArtifactTests
 {
     [Fact]
-    public void Contains_ordered_and_checksum_tracked_sql_migrations()
+    public void Contains_legacy_history_bootstrap_and_cleanup_sql_scripts()
     {
         var root = FindRepositoryRoot();
         var migrationDirectory = Path.Combine(
@@ -20,10 +20,16 @@ public sealed class PhaseTwoArtifactTests
             .OrderBy(name => name, StringComparer.Ordinal)
             .ToArray();
 
-        Assert.Equal(12, migrations.Length);
+        Assert.Equal(10, migrations.Length);
         Assert.Equal("001_CreateStatisticsSchema", migrations[0]);
-        Assert.Equal("012_FixMetricRegistryV1", migrations[^1]);
-        Assert.Contains("Checksum", File.ReadAllText(Path.Combine(root, "deploy", "device-event-statistics", "Apply-SqlMigrations.ps1")));
+        Assert.Equal("010_CleanupDeviceEventStatisticsSchema", migrations[^1]);
+        Assert.Contains("009_CreateDeviceEventStatisticsSchema", migrations);
+        Assert.DoesNotContain("011_AddScopedProcessedEventContract", migrations);
+        Assert.DoesNotContain("012_FixMetricRegistryV1", migrations);
+        Assert.Contains(
+            "009_CreateDeviceEventStatisticsSchema",
+            File.ReadAllText(Path.Combine(root, "deploy", "device-event-statistics", "Apply-SqlMigrations.ps1")),
+            StringComparison.Ordinal);
     }
 
     [Fact]
@@ -41,13 +47,17 @@ public sealed class PhaseTwoArtifactTests
         foreach (var file in Directory.GetFiles(migrationDirectory, "*.sql"))
         {
             var sql = File.ReadAllText(file);
-            if (!Path.GetFileName(file).StartsWith("009_", StringComparison.Ordinal))
+            if (!Path.GetFileName(file).StartsWith("009_", StringComparison.Ordinal) &&
+                !Path.GetFileName(file).StartsWith("010_", StringComparison.Ordinal))
             {
                 Assert.Contains("__SCHEMA__", sql);
             }
 
             Assert.DoesNotContain("HangFire", sql, StringComparison.OrdinalIgnoreCase);
-            Assert.DoesNotContain("DROP TABLE", sql, StringComparison.OrdinalIgnoreCase);
+            if (!Path.GetFileName(file).StartsWith("010_", StringComparison.Ordinal))
+            {
+                Assert.DoesNotContain("DROP TABLE", sql, StringComparison.OrdinalIgnoreCase);
+            }
         }
     }
 
@@ -69,6 +79,10 @@ public sealed class PhaseTwoArtifactTests
         Assert.DoesNotContain("USE [", sql, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("DROP TABLE", sql, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("sp_rename", sql, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("AuditLastSourceDocumentId", sql, StringComparison.Ordinal);
+        Assert.Contains("AuditStartedAtUtc", sql, StringComparison.Ordinal);
+        Assert.Contains("AuditCompletedAtUtc", sql, StringComparison.Ordinal);
+        Assert.Contains("AuditCycle", sql, StringComparison.Ordinal);
     }
 
     [Fact]

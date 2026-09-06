@@ -13,13 +13,12 @@ public sealed class PhaseFourArtifactTests
             "DeviceEventStatistics.Infrastructure",
             "SqlServer",
             "Migrations",
-            "011_AddScopedProcessedEventContract.sql");
+            "009_CreateDeviceEventStatisticsSchema.sql");
         var migration = File.ReadAllText(migrationPath);
 
         Assert.Contains("ProjectionProcessedEventTypeV2", migration, StringComparison.Ordinal);
         Assert.Contains("CompanyId", migration, StringComparison.Ordinal);
         Assert.Contains("DeviceId", migration, StringComparison.Ordinal);
-        Assert.Contains("ALTER TABLE", migration, StringComparison.Ordinal);
         Assert.DoesNotContain("DROP", migration, StringComparison.OrdinalIgnoreCase);
 
         var verifierPath = Path.Combine(
@@ -31,7 +30,7 @@ public sealed class PhaseFourArtifactTests
             "Schema",
             "SqlSchemaVerifier.cs");
         var verifier = File.ReadAllText(verifierPath);
-        Assert.Contains("012_FixMetricRegistryV1", verifier, StringComparison.Ordinal);
+        Assert.Contains("009_CreateDeviceEventStatisticsSchema", verifier, StringComparison.Ordinal);
         Assert.Contains("ProjectionProcessedEventTypeV2", verifier, StringComparison.Ordinal);
     }
 

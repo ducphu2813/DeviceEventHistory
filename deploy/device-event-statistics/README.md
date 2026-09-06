@@ -15,19 +15,20 @@ src/DeviceEventStatistics/DeviceEventStatistics.Infrastructure/SqlServer/Migrati
 The script creates the complete Statistics schema in the currently selected
 database. It does not contain `USE`, `DROP`, or rename statements, so it does
 not depend on a database name and does not modify legacy tables. Do not run it
-while another Statistics Worker instance is processing the database. The file
-is a create-only bootstrap script; it is not an in-place schema upgrade script.
+while another Statistics Worker instance is processing the database. This is
+the only create/bootstrap script for the current worker contract.
 
-For an existing Statistics database bootstrapped by migration 009, apply the
-versioned upgrade migrations through `Apply-SqlMigrations.ps1`. Migrations 010
-and 011 add the durable audit checkpoint and scoped `ProcessedEvent`/TVP V2
-contract without dropping or rewriting data. Migration 011 also adds the SQL
-membership index used by exact device reconciliation.
+If old Statistics objects must be removed, first execute
+`010_CleanupDeviceEventStatisticsSchema.sql` in the selected database. The
+cleanup is intentionally destructive but limited to the legacy/current
+Statistics tables and table types under `dbo`; it does not drop a database,
+schema, History objects, HangFire objects or ERP tables. Then execute 009.
 
-The older `001–008` files remain versioned migration history. Automated
-deployment may still use the migration runner below; the runtime identity only
-verifies the schema and latest migration, and never creates or alters SQL
-objects.
+The older `001–008` files remain as read-only legacy migration history. They
+are not part of the bootstrap path. `Apply-SqlMigrations.ps1` applies only 009;
+010 must be reviewed and executed manually because it is destructive. The
+runtime identity only verifies the schema and latest bootstrap, and never
+creates or alters SQL objects.
 
 ```powershell
 .\Apply-SqlMigrations.ps1 `

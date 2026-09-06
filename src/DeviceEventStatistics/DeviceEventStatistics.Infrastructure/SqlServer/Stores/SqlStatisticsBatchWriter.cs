@@ -92,6 +92,12 @@ public sealed class SqlStatisticsBatchWriter(
             stateResult.DailyChanges,
             batch.Lease,
             cancellationToken);
+        affectedRows += await operations.SyncDeviceDailySnapshotStateAsync(
+            session,
+            batch.Identity,
+            stateResult.DailyChanges,
+            batch.Lease,
+            cancellationToken);
         affectedRows += await operations.UpsertStateCursorsAsync(
             session,
             batch.Identity,

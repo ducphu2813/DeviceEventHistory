@@ -109,13 +109,13 @@ public sealed class SqlProjectionCheckpointStore(
                DateEquals(reader, 5, checkpoint.SweepToAtUtc) &&
                DateEquals(reader, 6, checkpoint.SweepLastPersistedAtUtc) &&
                StringEquals(reader, 7, checkpoint.SweepLastEventId) &&
-               (reader.GetInt64(8) == checkpoint.DataRevision ||
-                allowOneRevisionAhead && reader.GetInt64(8) == checkpoint.DataRevision + 1) &&
+               (ReadInt64(reader, 8) == checkpoint.DataRevision ||
+                allowOneRevisionAhead && ReadInt64(reader, 8) == checkpoint.DataRevision + 1) &&
                DateEquals(reader, 9, checkpoint.LastCompletedSweepAtUtc) &&
                StringEquals(reader, 10, checkpoint.AuditLastSourceDocumentId) &&
                DateEquals(reader, 11, checkpoint.AuditStartedAtUtc) &&
                DateEquals(reader, 12, checkpoint.AuditCompletedAtUtc) &&
-               reader.GetInt64(13) == checkpoint.AuditCycle;
+               ReadInt64(reader, 13) == checkpoint.AuditCycle;
     }
 
     private async Task<bool> AdvanceAsync(
@@ -192,8 +192,8 @@ public sealed class SqlProjectionCheckpointStore(
         command.CommandText = $"""
             SELECT [LastPersistedAtUtc], [LastEventId], [LastProcessedAtUtc], [LastBatchSize],
                    [SweepFromAtUtc], [SweepToAtUtc], [SweepLastPersistedAtUtc], [SweepLastEventId],
-                   [DataRevision], [LastCompletedSweepAtUtc], [AuditLastSourceDocumentId],
-                   [AuditStartedAtUtc], [AuditCompletedAtUtc], [AuditCycle], [Version]
+                   [DataRevision], [Version], [LastCompletedSweepAtUtc], [AuditLastSourceDocumentId],
+                   [AuditStartedAtUtc], [AuditCompletedAtUtc], [AuditCycle]
             FROM {Table("ProjectionCheckpoint")} WITH (UPDLOCK, HOLDLOCK)
             WHERE [ProjectionName] = @projectionName
               AND [ProjectionVersion] = @projectionVersion
@@ -212,19 +212,22 @@ public sealed class SqlProjectionCheckpointStore(
             ReadDate(reader, 5),
             ReadDate(reader, 6),
             reader.IsDBNull(7) ? null : reader.GetString(7),
-            reader.GetInt64(8),
+            ReadInt64(reader, 8),
             reader.IsDBNull(9) ? null : ((byte[])reader[9]).ToArray(),
             ReadDate(reader, 10),
             reader.IsDBNull(11) ? null : reader.GetString(11),
             ReadDate(reader, 12),
             ReadDate(reader, 13),
-            reader.GetInt64(14));
+            ReadInt64(reader, 14));
     }
 
     private static DateTimeOffset? ReadDate(SqlDataReader reader, int ordinal) =>
         reader.IsDBNull(ordinal)
             ? null
             : new DateTimeOffset(DateTime.SpecifyKind(reader.GetDateTime(ordinal), DateTimeKind.Utc));
+
+    private static long ReadInt64(SqlDataReader reader, int ordinal) =>
+        reader.IsDBNull(ordinal) ? 0 : reader.GetInt64(ordinal);
 
     private static void AddIdentityParameters(SqlCommand command, ProjectionIdentity identity)
     {

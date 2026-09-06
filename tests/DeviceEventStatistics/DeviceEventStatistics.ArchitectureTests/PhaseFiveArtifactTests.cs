@@ -15,18 +15,10 @@ public sealed class PhaseFiveArtifactTests
             "Migrations");
         var bootstrap = File.ReadAllText(
             Path.Combine(migrationDirectory, "009_CreateDeviceEventStatisticsSchema.sql"));
-        var upgrade = File.ReadAllText(Path.Combine(migrationDirectory, "012_FixMetricRegistryV1.sql"));
-
         Assert.Contains("'tag_read'", bootstrap, StringComparison.Ordinal);
         Assert.Contains("'device_error'", bootstrap, StringComparison.Ordinal);
         Assert.Contains("'device_error', 'Device error', 'error', 'count', 'error', 'erp_apphub', 0, 0", bootstrap, StringComparison.Ordinal);
         Assert.Contains("'snapshot_observed', 'Snapshot observed', 'connection', 'count', 'snapshot', 'erp_apphub', 0, 1", bootstrap, StringComparison.Ordinal);
-        Assert.Contains("JOIN", upgrade, StringComparison.Ordinal);
-        Assert.Contains("[MetricKey]", upgrade, StringComparison.Ordinal);
-        Assert.Contains("[MetricSetVersion]", upgrade, StringComparison.Ordinal);
-        Assert.Contains("[MetricCode]", upgrade, StringComparison.Ordinal);
-        Assert.DoesNotContain("DELETE", upgrade, StringComparison.OrdinalIgnoreCase);
-        Assert.DoesNotContain("DROP", upgrade, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]

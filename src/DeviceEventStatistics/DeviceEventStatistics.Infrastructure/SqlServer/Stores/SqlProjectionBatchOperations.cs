@@ -529,6 +529,53 @@ public sealed class SqlProjectionBatchOperations(
             cancellationToken);
     }
 
+    public async Task<int> SyncDeviceDailySnapshotStateAsync(
+        SqlProjectionSession session,
+        ProjectionIdentity identity,
+        IReadOnlyCollection<StateDailyContribution> changes,
+        ProjectionLeaseToken lease,
+        CancellationToken cancellationToken = default)
+    {
+        if (!changes.Any(change => change.Key.StateType == StateTypes.DeviceConnection)) return 0;
+
+        await EnsureFencedAsync(session, identity, lease, cancellationToken);
+        return await ExecuteAsync(
+            session,
+            $"""
+            ;WITH [Scopes] AS
+            (
+                SELECT DISTINCT [CompanyId], [DeviceId], [StatisticsDate]
+                FROM @stateDaily
+                WHERE [StateType] = @deviceConnectionStateType
+            )
+            UPDATE [snapshot]
+            SET [OpeningConnectionStatus] = [state].[OpeningConnectionStatus],
+                [ClosingConnectionStatus] = [state].[ClosingConnectionStatus],
+                [ConnectedEventCount] = [state].[ConnectedEventCount],
+                [DisconnectedEventCount] = [state].[DisconnectedEventCount],
+                [ReconnectCount] = [state].[ReconnectCount],
+                [UpdatedAtUtc] = SYSUTCDATETIME()
+            FROM {Table("DeviceDailySnapshot")} [snapshot]
+            INNER JOIN {Table("DeviceStateDaily")} [state]
+                ON [state].[ProjectionVersion] = [snapshot].[ProjectionVersion]
+               AND [state].[CompanyId] = [snapshot].[CompanyId]
+               AND [state].[DeviceId] = [snapshot].[DeviceId]
+               AND [state].[StatisticsDate] = [snapshot].[StatisticsDate]
+            INNER JOIN [Scopes] [scope]
+                ON [scope].[CompanyId] = [state].[CompanyId]
+               AND [scope].[DeviceId] = [state].[DeviceId]
+               AND [scope].[StatisticsDate] = [state].[StatisticsDate]
+            WHERE [snapshot].[ProjectionVersion] = @projectionVersion
+              AND [state].[StateType] = @deviceConnectionStateType;
+            """,
+            command =>
+            {
+                AddProjectionParameters(command, identity, mapper.MapStateDailyContributions(changes), "stateDaily");
+                command.Parameters.Add(new SqlParameter("@deviceConnectionStateType", StateTypes.DeviceConnection));
+            },
+            cancellationToken);
+    }
+
     public async Task<int> UpsertStateCursorsAsync(
         SqlProjectionSession session,
         ProjectionIdentity identity,

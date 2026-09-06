@@ -86,6 +86,12 @@ public sealed class SqlDurationRefreshStore(
             dailyChanges,
             lease,
             cancellationToken);
+        affectedRows += await operations.SyncDeviceDailySnapshotStateAsync(
+            session,
+            identity,
+            dailyChanges,
+            lease,
+            cancellationToken);
         affectedRows += await operations.UpsertStateCursorsAsync(
             session,
             identity,

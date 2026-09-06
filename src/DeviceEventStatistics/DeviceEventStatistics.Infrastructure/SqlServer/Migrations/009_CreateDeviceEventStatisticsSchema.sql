@@ -257,6 +257,10 @@ BEGIN
         [LeaseEpoch] bigint NULL,
         [DataRevision] bigint NULL,
         [LastCompletedSweepAtUtc] datetime2(7) NULL,
+        [AuditLastSourceDocumentId] varchar(256) NULL,
+        [AuditStartedAtUtc] datetime2(7) NULL,
+        [AuditCompletedAtUtc] datetime2(7) NULL,
+        [AuditCycle] bigint NULL CONSTRAINT [DF_DES_ProjectionCheckpoint_AuditCycle] DEFAULT 0,
         [UpdatedAtUtc] datetime2(7) NULL,
         [Version] rowversion NULL
     );
@@ -668,82 +672,71 @@ IF TYPE_ID(N'[dbo].[ProjectionReconciliationRequestType]') IS NULL
         [EvidenceEventId] binary(32) NULL
     )');
 
-CREATE INDEX [IX_DES_ProjectionDefinition_Identity]
-    ON [dbo].[DES.ProjectionDefinition] ([ProjectionName], [ProjectionVersion]);
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE [object_id] = OBJECT_ID(N'[dbo].[DES.ProjectionDefinition]') AND [name] = N'IX_DES_ProjectionDefinition_Identity')
+    CREATE INDEX [IX_DES_ProjectionDefinition_Identity] ON [dbo].[DES.ProjectionDefinition] ([ProjectionName], [ProjectionVersion]);
 
-CREATE INDEX [IX_DES_DeviceDimension_Identity]
-    ON [dbo].[DES.DeviceDimension] ([CompanyId], [DeviceId]);
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE [object_id] = OBJECT_ID(N'[dbo].[DES.DeviceDimension]') AND [name] = N'IX_DES_DeviceDimension_Identity')
+    CREATE INDEX [IX_DES_DeviceDimension_Identity] ON [dbo].[DES.DeviceDimension] ([CompanyId], [DeviceId]);
 
-CREATE INDEX [IX_DES_MetricDefinition_Identity]
-    ON [dbo].[DES.MetricDefinition] ([MetricSetVersion], [MetricCode]);
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE [object_id] = OBJECT_ID(N'[dbo].[DES.MetricDefinition]') AND [name] = N'IX_DES_MetricDefinition_Identity')
+    CREATE INDEX [IX_DES_MetricDefinition_Identity] ON [dbo].[DES.MetricDefinition] ([MetricSetVersion], [MetricCode]);
 
-CREATE INDEX [IX_DES_ProjectionCoverage_Identity]
-    ON [dbo].[DES.ProjectionCoverage]
-        ([ProjectionName], [ProjectionVersion], [CompanyId], [DeviceId], [StatisticsDate], [CoverageKind]);
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE [object_id] = OBJECT_ID(N'[dbo].[DES.ProjectionCoverage]') AND [name] = N'IX_DES_ProjectionCoverage_Identity')
+    CREATE INDEX [IX_DES_ProjectionCoverage_Identity] ON [dbo].[DES.ProjectionCoverage] ([ProjectionName], [ProjectionVersion], [CompanyId], [DeviceId], [StatisticsDate], [CoverageKind]);
 
-CREATE INDEX [IX_DES_DeviceEventDaily_Identity]
-    ON [dbo].[DES.DeviceEventDaily]
-        ([ProjectionVersion], [CompanyId], [DeviceId], [StatisticsDate], [MetricKey], [SourceKind]);
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE [object_id] = OBJECT_ID(N'[dbo].[DES.DeviceEventDaily]') AND [name] = N'IX_DES_DeviceEventDaily_Identity')
+    CREATE INDEX [IX_DES_DeviceEventDaily_Identity] ON [dbo].[DES.DeviceEventDaily] ([ProjectionVersion], [CompanyId], [DeviceId], [StatisticsDate], [MetricKey], [SourceKind]);
 
-CREATE INDEX [IX_DES_DeviceDailySnapshot_Identity]
-    ON [dbo].[DES.DeviceDailySnapshot] ([ProjectionVersion], [CompanyId], [DeviceId], [StatisticsDate]);
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE [object_id] = OBJECT_ID(N'[dbo].[DES.DeviceDailySnapshot]') AND [name] = N'IX_DES_DeviceDailySnapshot_Identity')
+    CREATE INDEX [IX_DES_DeviceDailySnapshot_Identity] ON [dbo].[DES.DeviceDailySnapshot] ([ProjectionVersion], [CompanyId], [DeviceId], [StatisticsDate]);
 
-CREATE INDEX [IX_DES_DeviceStateDaily_Identity]
-    ON [dbo].[DES.DeviceStateDaily]
-        ([ProjectionVersion], [CompanyId], [DeviceId], [StatisticsDate], [StateType]);
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE [object_id] = OBJECT_ID(N'[dbo].[DES.DeviceStateDaily]') AND [name] = N'IX_DES_DeviceStateDaily_Identity')
+    CREATE INDEX [IX_DES_DeviceStateDaily_Identity] ON [dbo].[DES.DeviceStateDaily] ([ProjectionVersion], [CompanyId], [DeviceId], [StatisticsDate], [StateType]);
 
-CREATE INDEX [IX_DES_DeviceStateCursor_Identity]
-    ON [dbo].[DES.DeviceStateCursor] ([ProjectionVersion], [CompanyId], [DeviceId], [StateType]);
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE [object_id] = OBJECT_ID(N'[dbo].[DES.DeviceStateCursor]') AND [name] = N'IX_DES_DeviceStateCursor_Identity')
+    CREATE INDEX [IX_DES_DeviceStateCursor_Identity] ON [dbo].[DES.DeviceStateCursor] ([ProjectionVersion], [CompanyId], [DeviceId], [StateType]);
 
-CREATE INDEX [IX_DES_ProcessedEvent_Identity]
-    ON [dbo].[DES.ProcessedEvent] ([ProjectionName], [ProjectionVersion], [EventId]);
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE [object_id] = OBJECT_ID(N'[dbo].[DES.ProcessedEvent]') AND [name] = N'IX_DES_ProcessedEvent_Identity')
+    CREATE INDEX [IX_DES_ProcessedEvent_Identity] ON [dbo].[DES.ProcessedEvent] ([ProjectionName], [ProjectionVersion], [EventId]);
 
-CREATE INDEX [IX_DES_ProcessedEvent_Scope]
-    ON [dbo].[DES.ProcessedEvent]
-        ([ProjectionName], [ProjectionVersion], [CompanyId], [DeviceId], [StatisticsDate], [TimelineAtUtc]);
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE [object_id] = OBJECT_ID(N'[dbo].[DES.ProcessedEvent]') AND [name] = N'IX_DES_ProcessedEvent_Scope')
+    CREATE INDEX [IX_DES_ProcessedEvent_Scope] ON [dbo].[DES.ProcessedEvent] ([ProjectionName], [ProjectionVersion], [CompanyId], [DeviceId], [StatisticsDate], [TimelineAtUtc]);
 
-CREATE INDEX [IX_DES_ProjectionCheckpoint_Identity]
-    ON [dbo].[DES.ProjectionCheckpoint] ([ProjectionName], [ProjectionVersion], [PartitionKey]);
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE [object_id] = OBJECT_ID(N'[dbo].[DES.ProjectionCheckpoint]') AND [name] = N'IX_DES_ProjectionCheckpoint_Identity')
+    CREATE INDEX [IX_DES_ProjectionCheckpoint_Identity] ON [dbo].[DES.ProjectionCheckpoint] ([ProjectionName], [ProjectionVersion], [PartitionKey]);
 
-CREATE INDEX [IX_DES_IngestionQualityDaily_Identity]
-    ON [dbo].[DES.IngestionQualityDaily]
-        ([ProjectionVersion], [StatisticsDate], [CompanyId], [SourceKind], [SourceId], [QualityCode]);
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE [object_id] = OBJECT_ID(N'[dbo].[DES.IngestionQualityDaily]') AND [name] = N'IX_DES_IngestionQualityDaily_Identity')
+    CREATE INDEX [IX_DES_IngestionQualityDaily_Identity] ON [dbo].[DES.IngestionQualityDaily] ([ProjectionVersion], [StatisticsDate], [CompanyId], [SourceKind], [SourceId], [QualityCode]);
 
-CREATE INDEX [IX_DES_ReconciliationRequest_Status]
-    ON [dbo].[DES.ReconciliationRequest]
-        ([ProjectionName], [ProjectionVersion], [Status], [RequestedAtUtc]);
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE [object_id] = OBJECT_ID(N'[dbo].[DES.ReconciliationRequest]') AND [name] = N'IX_DES_ReconciliationRequest_Status')
+    CREATE INDEX [IX_DES_ReconciliationRequest_Status] ON [dbo].[DES.ReconciliationRequest] ([ProjectionName], [ProjectionVersion], [Status], [RequestedAtUtc]);
 
-CREATE INDEX [IX_DES_ProjectionFailure_Identity]
-    ON [dbo].[DES.ProjectionFailure] ([ProjectionName], [ProjectionVersion], [FailureId]);
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE [object_id] = OBJECT_ID(N'[dbo].[DES.ProjectionFailure]') AND [name] = N'IX_DES_ProjectionFailure_Identity')
+    CREATE INDEX [IX_DES_ProjectionFailure_Identity] ON [dbo].[DES.ProjectionFailure] ([ProjectionName], [ProjectionVersion], [FailureId]);
 
-CREATE INDEX [IX_DES_ProjectionRun_RunId]
-    ON [dbo].[DES.ProjectionRun] ([RunId]);
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE [object_id] = OBJECT_ID(N'[dbo].[DES.ProjectionRun]') AND [name] = N'IX_DES_ProjectionRun_RunId')
+    CREATE INDEX [IX_DES_ProjectionRun_RunId] ON [dbo].[DES.ProjectionRun] ([RunId]);
 
-CREATE INDEX [IX_DES_ProjectionStagingEvent_Run]
-    ON [dbo].[DES.ProjectionStagingEvent] ([RunId], [EventId]);
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE [object_id] = OBJECT_ID(N'[dbo].[DES.ProjectionStagingEvent]') AND [name] = N'IX_DES_ProjectionStagingEvent_Run')
+    CREATE INDEX [IX_DES_ProjectionStagingEvent_Run] ON [dbo].[DES.ProjectionStagingEvent] ([RunId], [EventId]);
 
-CREATE INDEX [IX_DES_ProjectionStagingDaily_Run]
-    ON [dbo].[DES.ProjectionStagingDaily]
-        ([RunId], [ProjectionVersion], [CompanyId], [DeviceId], [StatisticsDate], [MetricKey], [SourceKind]);
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE [object_id] = OBJECT_ID(N'[dbo].[DES.ProjectionStagingDaily]') AND [name] = N'IX_DES_ProjectionStagingDaily_Run')
+    CREATE INDEX [IX_DES_ProjectionStagingDaily_Run] ON [dbo].[DES.ProjectionStagingDaily] ([RunId], [ProjectionVersion], [CompanyId], [DeviceId], [StatisticsDate], [MetricKey], [SourceKind]);
 
-CREATE INDEX [IX_DES_ProjectionStagingState_Run]
-    ON [dbo].[DES.ProjectionStagingState]
-        ([RunId], [ProjectionVersion], [CompanyId], [DeviceId], [StatisticsDate], [StateType]);
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE [object_id] = OBJECT_ID(N'[dbo].[DES.ProjectionStagingState]') AND [name] = N'IX_DES_ProjectionStagingState_Run')
+    CREATE INDEX [IX_DES_ProjectionStagingState_Run] ON [dbo].[DES.ProjectionStagingState] ([RunId], [ProjectionVersion], [CompanyId], [DeviceId], [StatisticsDate], [StateType]);
 
-CREATE INDEX [IX_DES_ProjectionStagingSummary_Run]
-    ON [dbo].[DES.ProjectionStagingSummary]
-        ([RunId], [ProjectionVersion], [CompanyId], [DeviceId], [StatisticsDate]);
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE [object_id] = OBJECT_ID(N'[dbo].[DES.ProjectionStagingSummary]') AND [name] = N'IX_DES_ProjectionStagingSummary_Run')
+    CREATE INDEX [IX_DES_ProjectionStagingSummary_Run] ON [dbo].[DES.ProjectionStagingSummary] ([RunId], [ProjectionVersion], [CompanyId], [DeviceId], [StatisticsDate]);
 
-CREATE INDEX [IX_DES_ProjectionStagingCoverage_Run]
-    ON [dbo].[DES.ProjectionStagingCoverage]
-        ([RunId], [ProjectionVersion], [CompanyId], [DeviceId], [StatisticsDate], [CoverageKind]);
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE [object_id] = OBJECT_ID(N'[dbo].[DES.ProjectionStagingCoverage]') AND [name] = N'IX_DES_ProjectionStagingCoverage_Run')
+    CREATE INDEX [IX_DES_ProjectionStagingCoverage_Run] ON [dbo].[DES.ProjectionStagingCoverage] ([RunId], [ProjectionVersion], [CompanyId], [DeviceId], [StatisticsDate], [CoverageKind]);
 
-CREATE INDEX [IX_DES_ProjectionStagingQuality_Run]
-    ON [dbo].[DES.ProjectionStagingQuality]
-        ([RunId], [ProjectionVersion], [StatisticsDate], [CompanyId], [SourceKind], [SourceId], [QualityCode]);
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE [object_id] = OBJECT_ID(N'[dbo].[DES.ProjectionStagingQuality]') AND [name] = N'IX_DES_ProjectionStagingQuality_Run')
+    CREATE INDEX [IX_DES_ProjectionStagingQuality_Run] ON [dbo].[DES.ProjectionStagingQuality] ([RunId], [ProjectionVersion], [StatisticsDate], [CompanyId], [SourceKind], [SourceId], [QualityCode]);
 
-CREATE INDEX [IX_DES_ProjectionStagingCursor_Run]
-    ON [dbo].[DES.ProjectionStagingCursor] ([RunId], [ProjectionVersion], [CompanyId], [DeviceId], [StateType]);
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE [object_id] = OBJECT_ID(N'[dbo].[DES.ProjectionStagingCursor]') AND [name] = N'IX_DES_ProjectionStagingCursor_Run')
+    CREATE INDEX [IX_DES_ProjectionStagingCursor_Run] ON [dbo].[DES.ProjectionStagingCursor] ([RunId], [ProjectionVersion], [CompanyId], [DeviceId], [StateType]);
 
 DECLARE @now datetime2(7) = SYSUTCDATETIME();
 
