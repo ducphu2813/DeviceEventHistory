@@ -153,14 +153,6 @@ internal static class MongoSchemaValidator
                 { "sha256", StringSchema() },
                 { "sizeBytes", IntegerSchema() }
             }
-        },
-        {
-            "anyOf",
-            new BsonArray
-            {
-                new BsonDocument("required", new BsonArray { "text" }),
-                new BsonDocument("required", new BsonArray { "arguments" })
-            }
         }
     };
 

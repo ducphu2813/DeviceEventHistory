@@ -17,4 +17,10 @@
       <ProjectReference Include="..\DeviceEventHistory.Application\DeviceEventHistory.Application.csproj" />
       <ProjectReference Include="..\DeviceEventHistory.Infrastructure\DeviceEventHistory.Infrastructure.csproj" />
     </ItemGroup>
+
+    <ItemGroup>
+        <Content Update="appsettings.json" CopyToPublishDirectory="Never" />
+        <Content Update="appsettings.Development.json" CopyToPublishDirectory="Never" />
+        <Content Update="appsettings.Example.json" CopyToPublishDirectory="Never" />
+    </ItemGroup>
 </Project>

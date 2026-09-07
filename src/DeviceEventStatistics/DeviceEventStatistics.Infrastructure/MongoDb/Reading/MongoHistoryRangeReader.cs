@@ -32,8 +32,7 @@ public sealed class MongoHistoryRangeReader(
                 Projection = MongoHistoryFieldProjection.Definition,
                 Sort = new BsonDocument("persistedAtUtc", 1).Add("eventId", 1),
                 Limit = pageSize,
-                BatchSize = pageSize,
-                Collation = new Collation("simple")
+                BatchSize = pageSize
             },
             cancellationToken);
         var documents = await cursor.ToListAsync(cancellationToken);
