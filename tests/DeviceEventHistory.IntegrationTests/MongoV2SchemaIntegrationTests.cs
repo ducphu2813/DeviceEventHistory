@@ -67,6 +67,8 @@ public sealed class MongoV2SchemaIntegrationTests
             Assert.Contains(AppConst.MongoDb.HistoryCompanyCategoryTimelineIndexName, indexNames);
             Assert.Contains(AppConst.MongoDb.HistorySourceReceivedAtIndexName, indexNames);
             Assert.Contains(AppConst.MongoDb.HistoryDeviceTimelineIndexName, indexNames);
+            Assert.Contains(AppConst.MongoDb.HistoryStatisticsCursorIndexName, indexNames);
+            Assert.Contains(AppConst.MongoDb.HistoryStatisticsScopedCursorIndexName, indexNames);
 
             var invalidV2Document = new BsonDocument
             {

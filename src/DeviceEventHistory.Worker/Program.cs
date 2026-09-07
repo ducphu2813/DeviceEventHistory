@@ -7,6 +7,10 @@ using DeviceEventHistory.Worker.Configuration;
 using DeviceEventHistory.Worker.Orchestration;
 
 var builder = Host.CreateApplicationBuilder(args);
+builder.Services.AddWindowsService(options =>
+{
+    options.ServiceName = "DeviceEventHistory";
+});
 builder.Services.AddDeviceEventHistoryConfiguration(builder.Configuration);
 builder.Services.AddHostedService<RawLogIngestionHostedService>();
 

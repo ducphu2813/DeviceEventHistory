@@ -15,6 +15,7 @@ public enum ProjectionMode
 {
     Incremental,
     Reconciliation,
+    Bootstrap,
     Backfill,
     Rebuild
 }
@@ -25,7 +26,11 @@ public sealed class ProjectionOptions
 
     public ProjectionMode Mode { get; set; } = ProjectionMode.Incremental;
 
+    public string Name { get; set; } = "device_event_daily";
+
     public int ProjectionVersion { get; set; } = 1;
+
+    public int MetricSetVersion { get; set; } = 1;
 
     public string MappingVersion { get; set; } = "v1";
 
@@ -44,6 +49,22 @@ public sealed class ProjectionOptions
     public TimeSpan OverlapWindow { get; set; } = TimeSpan.FromMinutes(5);
 
     public TimeSpan DeepDiscoveryInterval { get; set; } = TimeSpan.FromHours(6);
+
+    public int DeepDiscoveryMaxPages { get; set; } = 10;
+
+    public int DeepDiscoveryMaxEvents { get; set; } = 5000;
+
+    public TimeSpan DeepDiscoveryMaxDuration { get; set; } = TimeSpan.FromSeconds(30);
+
+    public TimeSpan LeaseDuration { get; set; } = TimeSpan.FromMinutes(2);
+
+    public TimeSpan LeaseRenewInterval { get; set; } = TimeSpan.FromSeconds(20);
+
+    public int PersistenceRetryCount { get; set; } = 5;
+
+    public TimeSpan RetryMinDelay { get; set; } = TimeSpan.FromSeconds(1);
+
+    public TimeSpan RetryMaxDelay { get; set; } = TimeSpan.FromSeconds(30);
 
     public ProjectionScopeOptions Scope { get; set; } = new();
 
@@ -70,10 +91,13 @@ public sealed class StateOptions
 
     public bool Enabled { get; set; } = true;
 
-    public List<string> StateTypes { get; set; } =
-        ["device_connection", "scanner_connection"];
+    public List<string> StateTypes { get; set; } = [];
 
     public int MaxForwardPropagationDays { get; set; } = 31;
+
+    public TimeSpan RefreshInterval { get; set; } = TimeSpan.FromMinutes(1);
+
+    public int RefreshPageSize { get; set; } = 100;
 }
 
 public sealed class ReconciliationOptions
@@ -88,6 +112,8 @@ public sealed class ReconciliationOptions
 
     public int MaxRequestsPerRun { get; set; } = 100;
 
+    public int MaxAttempts { get; set; } = 5;
+
     public int MaxRangeDays { get; set; } = 31;
 }
 
@@ -100,6 +126,8 @@ public sealed class RetentionOptions
     public int MinimumHistoryHeadroomDays { get; set; } = 2;
 
     public TimeSpan RecoveryLookback { get; set; } = TimeSpan.FromHours(1);
+
+    public int ProjectionRunRetentionDays { get; set; } = 90;
 }
 
 public sealed class ObservabilityOptions
@@ -111,6 +139,10 @@ public sealed class ObservabilityOptions
     public TimeSpan LagViolationAfter { get; set; } = TimeSpan.FromHours(24);
 
     public TimeSpan HealthCheckInterval { get; set; } = TimeSpan.FromSeconds(30);
+
+    public bool HealthEndpointEnabled { get; set; } = true;
+
+    public int HealthPort { get; set; } = 8080;
 }
 
 public sealed class MetadataOptions

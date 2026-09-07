@@ -21,7 +21,7 @@ public sealed class MongoHistoryDatabaseOptions
     public string HistoryCollection { get; set; } = "device_event_history";
 
     public List<string> RequiredHistoryIndexNames { get; set; } =
-        ["ux_event_id"];
+        ["ux_event_id", "ix_statistics_persisted_event_id", "ix_statistics_scope_persisted_event_id"];
 
     public void ApplyEnvironmentConnectionString()
     {
@@ -40,9 +40,9 @@ public sealed class SqlStatisticsDatabaseOptions
     public string ConnectionStringEnvironmentVariable { get; set; } =
         "DEVICE_EVENT_STATISTICS_SQL_CONNECTION_STRING";
 
-    public string DatabaseName { get; set; } = "device_event_statistics";
+    public string DatabaseName { get; set; } = "UA-REPORTING-DB";
 
-    public string SchemaName { get; set; } = "device_stats";
+    public string SchemaName { get; set; } = "dbo";
 
     public int CommandTimeoutSeconds { get; set; } = 30;
 

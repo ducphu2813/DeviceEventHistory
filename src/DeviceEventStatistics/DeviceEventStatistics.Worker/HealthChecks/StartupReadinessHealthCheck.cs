@@ -1,3 +1,4 @@
+using DeviceEventStatistics.Domain.Common;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using DeviceEventStatistics.Worker.Configuration;
 
@@ -12,11 +13,16 @@ public sealed class StartupReadinessHealthCheck(StartupReadinessState state) : I
         if (state.IsReady)
         {
             return Task.FromResult(
-                HealthCheckResult.Healthy(state.IsDisabled ? "Statistics worker is disabled." : "Startup preflight completed."));
+                HealthCheckResult.Healthy(
+                    state.IsDisabled
+                        ? StatisticsContractConstants.Messages.MSG_HEALTH_DISABLED
+                        : StatisticsContractConstants.Messages.MSG_HEALTH_READY));
         }
 
         return Task.FromResult(
             HealthCheckResult.Unhealthy(
-                $"Statistics worker is not ready. FailureCode={state.FailureCode ?? "STAT-STARTUP-NOT-COMPLETED"}"));
+                StatisticsContractConstants.Messages.Format(
+                    StatisticsContractConstants.Messages.MSG_HEALTH_NOT_READY,
+                    state.FailureCode ?? StatisticsContractConstants.StartupErrors.NotCompleted)));
     }
 }

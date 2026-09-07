@@ -215,6 +215,8 @@ public static class AppConst
         public const string HistoryTagTimelineIndexName = "ix_tag_timeline_at_utc_desc";
         public const string HistoryParseStatusReceivedAtV2IndexName = "ix_parse_status_received_at_utc_desc_v2";
         public const string HistorySourceOffsetV2IndexName = "ix_source_file_offset_v2";
+        public const string HistoryStatisticsCursorIndexName = "ix_statistics_persisted_event_id";
+        public const string HistoryStatisticsScopedCursorIndexName = "ix_statistics_scope_persisted_event_id";
         public const string FailureSourceOffsetIndexName = "ix_source_file_offset";
         public const string FailureCodeReceivedAtIndexName = "ix_error_code_received_at_utc_desc";
         public const string FailureSourceErrorReceivedAtIndexName = "ix_source_error_received_at_utc_desc";

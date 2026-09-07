@@ -17,7 +17,7 @@ Các ngưỡng tuning trong Plan là cấu hình khởi điểm cho UAT. Team đ
 | Hạng mục | Quyết định |
 |---|---|
 | Runtime | Thêm `.NET 10` `DeviceEventStatistics.Worker`, executable/deployment riêng |
-| SQL | Database riêng, ví dụ `device_event_statistics`; schema `device_stats` |
+| SQL | Database Report ERP `UA-REPORTING-DB`; schema mặc định `dbo` |
 | Configuration | Mongo và SQL có options/connection string riêng dưới `DatabaseSettings` |
 | Context | `MongoHistoryDbContext` và `SqlStatisticsDbContext` riêng trong Infrastructure |
 | SQL access | `Microsoft.Data.SqlClient`, parameterized commands/TVP, SQL-local transaction; không thêm EF Core trong Sprint 3 |
@@ -52,8 +52,8 @@ RFID raw-log + ERP AppHub
           -> daily facts / state / reconciliation
                   |
                   v
-       SQL database device_event_statistics
-          schema device_stats
+       SQL database UA-REPORTING-DB
+          schema dbo
 ```
 
 ### 3.1. Dependency và trách nhiệm
@@ -105,10 +105,12 @@ P0 cập nhật `Sprint-3-Design.md` và `Sprint-3-Schema.md` theo các delta d�
 ### 4.1. Bảng SQL đích
 
 Giữ kiểu SQL theo Schema: IDs/counters/duration `bigint`, thời gian UTC `datetime2(7)`, event SHA-256 `binary(32)`, display text `nvarchar`, concurrency `rowversion`.
+Các bảng vật lý của Statistics dùng schema mặc định `dbo` và tiền tố tên bảng
+`DES.`; ví dụ `[dbo].[DES.DeviceDailySnapshot]`.
 
 | Bảng | Grain/trách nhiệm và thay đổi cần làm |
 |---|---|
-| `SchemaMigration` | Migration ID/checksum/applied time; Worker chỉ kiểm tra version |
+| `DES.SchemaMigration` | Migration ID/checksum/applied time; Worker chỉ kiểm tra version |
 | `ProjectionDefinition` | PK name/version; immutable MappingVersion, OwnershipVersion, MetricSetVersion, CoverageStartAtUtc, TimeZoneId, lifecycle status |
 | `DeviceDimension` | PK company/device; current display metadata, timezone Việt Nam; `IsActive` nullable khi thiếu evidence |
 | `MetricDefinition` | Unique `(MetricSetVersion, MetricCode)`; không overwrite metric set cũ |
@@ -166,7 +168,7 @@ src/
     Mapping/{AppHubControlMetricMapper,AppHubSensorMetricMapper,AppHubScannerMetricMapper}.cs
     Mapping/ProjectionEventOutcome.cs
     Metadata/{IDeviceMetadataResolver,DeviceMetadata}.cs
-    Time/VietnamStatisticsDateResolver.cs
+    Time/LocalStatisticsDateResolver.cs
     Projection/{StatisticsProjectionPipeline,IncrementalProjectionHandler}.cs
     Projection/{ProjectionBatch,ProjectionCheckpoint,ProjectionSweep,ProjectionDefinition}.cs
     Projection/{IProjectionLeaseStore,IProjectionCheckpointStore}.cs
@@ -194,11 +196,8 @@ src/
     SqlServer/Stores/{SqlProjectionLeaseStore,SqlProjectionCheckpointStore}.cs
     SqlServer/Stores/{SqlStatisticsBatchWriter,SqlProjectionRebuildStore}.cs
     SqlServer/Stores/{SqlDurationRefreshStore,SqlReconciliationRequestStore}.cs
-    SqlServer/Migrations/001_CreateStatisticsSchema.sql
-    SqlServer/Migrations/002_CreateProjectionTables.sql
-    SqlServer/Migrations/003_CreateIndexesAndTableTypes.sql
-    SqlServer/Migrations/004_CreateProjectionProcedures.sql
-    SqlServer/Migrations/005_SeedMetricSetV1.sql
+    SqlServer/Migrations/001_CreateStatisticsSchema.sql ... 008_EnableBootstrapRunType.sql
+    SqlServer/Migrations/009_CreateDeviceEventStatisticsSchema.sql
     Metadata/ConfigurationDeviceMetadataResolver.cs
     Observability/{StatisticsMetrics,StatisticsHealthState,LoggingScopes}.cs
 
@@ -228,7 +227,7 @@ tests/
     ProjectionSweepTests.cs
     MetricOwnershipTests.cs
     MetricMappingTests.cs
-    VietnamStatisticsDateResolverTests.cs
+    LocalStatisticsDateResolverTests.cs
     StateDurationCalculatorTests.cs
     ForwardStatePropagationTests.cs
     ProjectionCoverageTests.cs
@@ -459,7 +458,7 @@ Deep discovery admission chạy trước. Reconcile sửa tập đã admission, 
     "WorkerId": "device-event-statistics-worker-01",
     "DatabaseSettings": {
       "MongoDb": { "ConnectionString": "", "DatabaseName": "device_event_history", "HistoryCollection": "device_event_history" },
-      "SqlServer": { "ConnectionString": "", "DatabaseName": "device_event_statistics", "SchemaName": "device_stats", "CommandTimeout": "00:00:30" }
+      "SqlServer": { "ConnectionString": "", "DatabaseName": "UA-REPORTING-DB", "SchemaName": "dbo", "CommandTimeout": "00:00:30" }
     },
     "Projection": {
       "Name": "device_event_daily", "Version": 1, "Mode": "Incremental", "CoverageStartAtUtc": null,
@@ -615,7 +614,7 @@ Mỗi phase dưới đây có mục tiêu, đầu vào, file chịu trách nhi�
 
 **Phụ thuộc:** P0 schema contract và P1 contexts. Logic metric/state được tích hợp ở P4-P6.
 
-**File chính:** `SqlServer/Migrations/001-005`, `SqlProjectionSession.cs`, `SqlProjectionLeaseStore.cs`, `SqlProjectionCheckpointStore.cs`, `ProjectionTvpMapper.cs`, `SqlRetryPolicy.cs`, `SqlSchemaVerifier.cs`, `Apply-SqlMigrations.ps1`.
+**File chính:** `SqlServer/Migrations/001-009`, `SqlProjectionSession.cs`, `SqlProjectionLeaseStore.cs`, `SqlProjectionCheckpointStore.cs`, `ProjectionTvpMapper.cs`, `SqlRetryPolicy.cs`, `SqlSchemaVerifier.cs`, `Apply-SqlMigrations.ps1`.
 
 #### Task P2.1 - Viết migrations cho toàn bộ statistics schema
 
@@ -675,7 +674,7 @@ Mỗi phase dưới đây có mục tiêu, đầu vào, file chịu trách nhi�
 
 **Phụ thuộc:** P1; contract fixtures P0.3/P0.5. Integration với SQL cần P2.
 
-**File chính:** `MongoDb/Reading/*`, `HistoryDocumentMapper.cs`, `History/*`, `ProjectionSweep.cs`, `Mapping/*`, `VietnamStatisticsDateResolver.cs`, metadata resolver và Mongo index deployment script.
+**File chính:** `MongoDb/Reading/*`, `HistoryDocumentMapper.cs`, `History/*`, `ProjectionSweep.cs`, `Mapping/*`, `LocalStatisticsDateResolver.cs`, metadata resolver và Mongo index deployment script.
 
 #### Task P3.1 - Minimal history input và BSON mapper
 
@@ -712,7 +711,7 @@ Mỗi phase dưới đây có mục tiêu, đầu vào, file chịu trách nhi�
 
 #### Task P3.5 - Ngày thống kê và metadata
 
-- VietnamStatisticsDateResolver dùng fixed UTC+7 để trả StatisticsDate/bucket start/end từ timeline UTC.
+- LocalStatisticsDateResolver dùng fixed UTC+7 để trả StatisticsDate/bucket start/end từ timeline UTC.
 - Metadata resolver ưu tiên cấu hình; event display fields chỉ bổ sung giá trị chưa có.
 - Device/company không hợp lệ đi failure/quality theo contract; không suy từ FileId hoặc source filename.
 - Placeholder dimension không tự gán active/operating schedule; creation do SQL writer thực hiện cùng fact transaction.
