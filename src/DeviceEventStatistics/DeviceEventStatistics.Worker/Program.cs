@@ -10,6 +10,10 @@ using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.Options;
 
 var builder = WebApplication.CreateBuilder(args);
+builder.Services.AddWindowsService(options =>
+{
+    options.ServiceName = "DeviceEventStatistics";
+});
 var healthSection = builder.Configuration.GetSection(ObservabilityOptions.SectionName);
 if (healthSection.GetValue(nameof(ObservabilityOptions.HealthEndpointEnabled), true))
 {
