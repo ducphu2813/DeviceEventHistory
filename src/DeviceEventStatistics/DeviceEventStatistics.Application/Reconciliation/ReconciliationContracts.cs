@@ -210,16 +210,25 @@ public interface IProjectionRecoveryStore
         CancellationToken cancellationToken = default);
 }
 
+public sealed record OperationalCleanupOptions(
+    DateTimeOffset ProcessedEventCutoffAtUtc,
+    DateTimeOffset StagingCutoffAtUtc,
+    DateTimeOffset ProjectionRunCutoffAtUtc,
+    DateTimeOffset ResolvedFailureCutoffAtUtc,
+    DateTimeOffset CompletedReconciliationCutoffAtUtc,
+    int BatchSize);
+
 public sealed record OperationalCleanupResult(
+    int DeletedProcessedEvents,
     int DeletedStagingRows,
-    int DeletedProjectionRuns);
+    int DeletedProjectionRuns,
+    int DeletedResolvedFailures,
+    int DeletedCompletedReconciliationRequests);
 
 public interface IOperationalCleanupStore
 {
     Task<OperationalCleanupResult> CleanupAsync(
         ProjectionIdentity identity,
-        ProjectionLeaseToken lease,
-        DateTimeOffset projectionRunCutoffAtUtc,
-        DateTimeOffset stagingCutoffAtUtc,
+        OperationalCleanupOptions options,
         CancellationToken cancellationToken = default);
 }

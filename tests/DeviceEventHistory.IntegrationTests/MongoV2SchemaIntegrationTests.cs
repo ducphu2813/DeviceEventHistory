@@ -29,7 +29,7 @@ public sealed class MongoV2SchemaIntegrationTests
         };
         var context = new MongoDbContext(options);
         var retryPolicy = new MongoRetryPolicy(0);
-        var initializer = new MongoIndexInitializer(context, retryPolicy);
+        var initializer = new MongoIndexInitializer(context, retryPolicy, new MongoRetentionSettings(3, 30));
         var writer = new MongoDeviceEventHistoryWriter(context, retryPolicy);
 
         try
@@ -69,6 +69,20 @@ public sealed class MongoV2SchemaIntegrationTests
             Assert.Contains(AppConst.MongoDb.HistoryDeviceTimelineIndexName, indexNames);
             Assert.Contains(AppConst.MongoDb.HistoryStatisticsCursorIndexName, indexNames);
             Assert.Contains(AppConst.MongoDb.HistoryStatisticsScopedCursorIndexName, indexNames);
+            Assert.Contains(AppConst.MongoDb.HistoryRetentionTtlIndexName, indexNames);
+
+            var historyTtlIndex = indexDocuments.Single(index =>
+                index["name"].AsString == AppConst.MongoDb.HistoryRetentionTtlIndexName);
+            Assert.Equal(259_200, historyTtlIndex["expireAfterSeconds"].ToInt32());
+
+            var failureIndexes = await (await context
+                    .GetCollection(AppConst.MongoDb.FailureCollection)
+                    .Indexes
+                    .ListAsync())
+                .ToListAsync();
+            var failureTtlIndex = failureIndexes.Single(index =>
+                index["name"].AsString == AppConst.MongoDb.FailureRetentionTtlIndexName);
+            Assert.Equal(2_592_000, failureTtlIndex["expireAfterSeconds"].ToInt32());
 
             var invalidV2Document = new BsonDocument
             {

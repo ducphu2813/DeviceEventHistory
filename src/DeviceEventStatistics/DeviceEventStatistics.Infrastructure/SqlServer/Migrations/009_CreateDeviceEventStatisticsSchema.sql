@@ -702,6 +702,9 @@ IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE [object_id] = OBJECT_ID(N'[dbo].[
 IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE [object_id] = OBJECT_ID(N'[dbo].[DES.ProcessedEvent]') AND [name] = N'IX_DES_ProcessedEvent_Scope')
     CREATE INDEX [IX_DES_ProcessedEvent_Scope] ON [dbo].[DES.ProcessedEvent] ([ProjectionName], [ProjectionVersion], [CompanyId], [DeviceId], [StatisticsDate], [TimelineAtUtc]);
 
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE [object_id] = OBJECT_ID(N'[dbo].[DES.ProcessedEvent]') AND [name] = N'IX_DES_ProcessedEvent_Retention')
+    CREATE INDEX [IX_DES_ProcessedEvent_Retention] ON [dbo].[DES.ProcessedEvent] ([ProjectionName], [ProjectionVersion], [SourcePersistedAtUtc], [ProcessedEventId]);
+
 IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE [object_id] = OBJECT_ID(N'[dbo].[DES.ProjectionCheckpoint]') AND [name] = N'IX_DES_ProjectionCheckpoint_Identity')
     CREATE INDEX [IX_DES_ProjectionCheckpoint_Identity] ON [dbo].[DES.ProjectionCheckpoint] ([ProjectionName], [ProjectionVersion], [PartitionKey]);
 

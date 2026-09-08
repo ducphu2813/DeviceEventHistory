@@ -20,7 +20,7 @@ public interface IStatisticsTelemetry
         ReconciliationRunResult result,
         TimeSpan duration);
 
-    void RecordOperationalCleanup(int deletedStagingRows, int deletedProjectionRuns);
+    void RecordOperationalCleanup(OperationalCleanupResult result);
 
     void RecordHealthSnapshot(
         ProjectionOperationalSnapshot snapshot,
@@ -45,7 +45,7 @@ public sealed class NullStatisticsTelemetry : IStatisticsTelemetry
     {
     }
 
-    public void RecordOperationalCleanup(int deletedStagingRows, int deletedProjectionRuns)
+    public void RecordOperationalCleanup(OperationalCleanupResult result)
     {
     }
 

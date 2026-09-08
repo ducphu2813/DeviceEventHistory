@@ -10,10 +10,14 @@ param(
     [string]$SchemaName = "dbo",
 
     [Parameter(Mandatory = $false)]
-    [string]$MigrationPath = (Join-Path $PSScriptRoot "..\..\src\DeviceEventStatistics\DeviceEventStatistics.Infrastructure\SqlServer\Migrations")
+    [string]$MigrationPath = (Join-Path $PSScriptRoot "Migrations")
 )
 
 $ErrorActionPreference = "Stop"
+
+if (-not (Test-Path -LiteralPath $MigrationPath -PathType Container)) {
+    $MigrationPath = Join-Path $PSScriptRoot "..\..\src\DeviceEventStatistics\DeviceEventStatistics.Infrastructure\SqlServer\Migrations"
+}
 
 if ($SchemaName -ne "dbo") {
     throw "The standalone Statistics bootstrap uses the dbo schema by contract."
@@ -23,9 +27,15 @@ if (-not (Get-Module -ListAvailable -Name SqlServer)) {
     throw "The SqlServer PowerShell module is required to apply the bootstrap."
 }
 
-$bootstrapPath = Join-Path $MigrationPath "009_CreateDeviceEventStatisticsSchema.sql"
-if (-not (Test-Path -LiteralPath $bootstrapPath -PathType Leaf)) {
-    throw "The Statistics bootstrap script was not found: $bootstrapPath"
+$migrationFiles = @(
+    "009_CreateDeviceEventStatisticsSchema.sql",
+    "011_AddRetentionCleanupIndexes.sql"
+)
+foreach ($migrationFile in $migrationFiles) {
+    $filePath = Join-Path $MigrationPath $migrationFile
+    if (-not (Test-Path -LiteralPath $filePath -PathType Leaf)) {
+        throw "The Statistics migration script was not found: $filePath"
+    }
 }
 
 Import-Module SqlServer
@@ -40,8 +50,11 @@ if (-not [string]::Equals([string]$target.DatabaseName, $DatabaseName, [StringCo
     throw "Resolved SQL database does not match the requested target."
 }
 
-$script = [IO.File]::ReadAllText($bootstrapPath).Replace("__SCHEMA__", $SchemaName)
-Write-Host "Applying Statistics bootstrap: 009_CreateDeviceEventStatisticsSchema"
-Invoke-StatisticsSql $script | Out-Null
-Write-Host "Statistics bootstrap completed for database '$DatabaseName' and schema '$SchemaName'."
+foreach ($migrationFile in $migrationFiles) {
+    $filePath = Join-Path $MigrationPath $migrationFile
+    $script = [IO.File]::ReadAllText($filePath).Replace("__SCHEMA__", $SchemaName)
+    Write-Host "Applying Statistics migration: $migrationFile"
+    Invoke-StatisticsSql $script | Out-Null
+}
+Write-Host "Statistics migrations completed for database '$DatabaseName' and schema '$SchemaName'."
 Write-Host "Run 010_CleanupDeviceEventStatisticsSchema.sql manually before 009 only when a destructive reset is explicitly intended."

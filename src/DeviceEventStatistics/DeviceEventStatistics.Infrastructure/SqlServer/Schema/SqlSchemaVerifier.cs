@@ -8,7 +8,7 @@ public sealed class SqlSchemaVerifier(
     SqlStatisticsDbContext dbContext,
     SqlStatisticsDatabaseOptions options)
 {
-    public const string ExpectedLatestMigrationId = "009_CreateDeviceEventStatisticsSchema";
+    public const string ExpectedLatestMigrationId = "011_AddRetentionCleanupIndexes";
 
     private static readonly string[] RequiredProcessedEventColumns =
     [
@@ -75,6 +75,7 @@ public sealed class SqlSchemaVerifier(
         await VerifyTablesAsync(connection, cancellationToken);
         await VerifyCheckpointColumnsAsync(connection, cancellationToken);
         await VerifyProcessedEventColumnsAsync(connection, cancellationToken);
+        await VerifyProcessedEventRetentionIndexAsync(connection, cancellationToken);
         await VerifyTableTypesAsync(connection, cancellationToken);
         await VerifyMetricRegistryAsync(connection, cancellationToken);
     }
@@ -221,6 +222,30 @@ public sealed class SqlSchemaVerifier(
                     StatisticsContractConstants.Messages.MSG_SQL_COLUMNS_MISSING,
                     StatisticsSqlObjectNames.QualifiedTable(options.SchemaName, "ProjectionCheckpoint"),
                     string.Join(", ", missingColumns)));
+        }
+    }
+
+    private async Task VerifyProcessedEventRetentionIndexAsync(
+        SqlConnection connection,
+        CancellationToken cancellationToken)
+    {
+        await using var command = connection.CreateCommand();
+        command.CommandText = """
+            SELECT 1
+            FROM sys.indexes
+            WHERE [object_id] = OBJECT_ID(@tableName)
+              AND [name] = N'IX_DES_ProcessedEvent_Retention';
+            """;
+        command.CommandTimeout = options.CommandTimeoutSeconds;
+        command.Parameters.Add(new SqlParameter(
+            "@tableName",
+            StatisticsSqlObjectNames.QualifiedTable(options.SchemaName, "ProcessedEvent")));
+        if (await command.ExecuteScalarAsync(cancellationToken) is null)
+        {
+            throw new InvalidOperationException(
+                StatisticsContractConstants.Messages.Format(
+                    StatisticsContractConstants.Messages.MSG_SQL_MIGRATION_MISSING,
+                    ExpectedLatestMigrationId));
         }
     }
 

@@ -35,7 +35,9 @@ public sealed class PhaseSevenRecoveryTests
         var worker = Options.Create(new WorkerOptions { Enabled = true });
         var options = new RetentionOptions { ProjectionRunRetentionDays = 0 };
 
-        var result = new RetentionOptionsValidator(worker).Validate(Options.DefaultName, options);
+        var result = new RetentionOptionsValidator(
+            worker,
+            Options.Create(new ReconciliationOptions())).Validate(Options.DefaultName, options);
 
         Assert.False(result.Succeeded);
         Assert.Contains("STAT-CONFIG-PROJECTION-RUN-RETENTION-POSITIVE", result.FailureMessage);

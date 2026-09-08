@@ -32,7 +32,7 @@ public sealed class MongoPersistenceIntegrationTests
         };
         var context = new MongoDbContext(options);
         var retryPolicy = new MongoRetryPolicy(0);
-        var initializer = new MongoIndexInitializer(context, retryPolicy);
+        var initializer = new MongoIndexInitializer(context, retryPolicy, new MongoRetentionSettings(3, 30));
         var historyWriter = new MongoDeviceEventHistoryWriter(context, retryPolicy);
         var checkpointStore = new MongoIngestionCheckpointStore(context, retryPolicy);
 

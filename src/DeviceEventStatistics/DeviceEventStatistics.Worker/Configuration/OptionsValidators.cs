@@ -49,6 +49,14 @@ internal static class ConfigurationValidationErrors
     public const string RetentionHeadroomInvalid = "STAT-CONFIG-RETENTION-HEADROOM-INVALID";
     public const string RecoveryLookbackPositive = "STAT-CONFIG-RECOVERY-LOOKBACK-POSITIVE";
     public const string ProjectionRunRetentionPositive = "STAT-CONFIG-PROJECTION-RUN-RETENTION-POSITIVE";
+    public const string ProcessedEventRetentionPositive = "STAT-CONFIG-PROCESSED-EVENT-RETENTION-POSITIVE";
+    public const string ProcessedEventRetentionTooShort = "STAT-CONFIG-PROCESSED-EVENT-RETENTION-TOO-SHORT";
+    public const string StagingRetentionPositive = "STAT-CONFIG-STAGING-RETENTION-POSITIVE";
+    public const string ResolvedFailureRetentionPositive = "STAT-CONFIG-RESOLVED-FAILURE-RETENTION-POSITIVE";
+    public const string CompletedReconciliationRetentionPositive = "STAT-CONFIG-COMPLETED-RECONCILIATION-RETENTION-POSITIVE";
+    public const string CleanupIntervalPositive = "STAT-CONFIG-CLEANUP-INTERVAL-POSITIVE";
+    public const string CleanupBatchSizePositive = "STAT-CONFIG-CLEANUP-BATCH-SIZE-POSITIVE";
+    public const string RollingDaysExceedsRetentionWindow = "STAT-CONFIG-ROLLING-DAYS-EXCEEDS-RETENTION-WINDOW";
     public const string LagWarningPositive = "STAT-CONFIG-LAG-WARNING-POSITIVE";
     public const string LagViolationAfterWarning = "STAT-CONFIG-LAG-VIOLATION-AFTER-WARNING";
     public const string HealthIntervalPositive = "STAT-CONFIG-HEALTH-INTERVAL-POSITIVE";
@@ -249,7 +257,9 @@ public sealed class ReconciliationOptionsValidator(IOptions<WorkerOptions> worke
     }
 }
 
-public sealed class RetentionOptionsValidator(IOptions<WorkerOptions> workerOptions)
+public sealed class RetentionOptionsValidator(
+    IOptions<WorkerOptions> workerOptions,
+    IOptions<ReconciliationOptions> reconciliationOptions)
     : IValidateOptions<RetentionOptions>
 {
     public ValidateOptionsResult Validate(string? name, RetentionOptions options)
@@ -271,6 +281,42 @@ public sealed class RetentionOptionsValidator(IOptions<WorkerOptions> workerOpti
         if (options.ProjectionRunRetentionDays <= 0)
         {
             failures.Add(ConfigurationValidationErrors.ProjectionRunRetentionPositive);
+        }
+        if (options.ProcessedEventRetentionDays <= 0)
+        {
+            failures.Add(ConfigurationValidationErrors.ProcessedEventRetentionPositive);
+        }
+        else if (options.ProcessedEventRetentionDays <= options.MongoHistoryRetentionDays)
+        {
+            failures.Add(ConfigurationValidationErrors.ProcessedEventRetentionTooShort);
+        }
+
+        if (options.StagingRetentionDays <= 0)
+        {
+            failures.Add(ConfigurationValidationErrors.StagingRetentionPositive);
+        }
+        if (options.ResolvedFailureRetentionDays <= 0)
+        {
+            failures.Add(ConfigurationValidationErrors.ResolvedFailureRetentionPositive);
+        }
+        if (options.CompletedReconciliationRetentionDays <= 0)
+        {
+            failures.Add(ConfigurationValidationErrors.CompletedReconciliationRetentionPositive);
+        }
+        if (options.CleanupInterval <= TimeSpan.Zero)
+        {
+            failures.Add(ConfigurationValidationErrors.CleanupIntervalPositive);
+        }
+        if (options.CleanupBatchSize <= 0)
+        {
+            failures.Add(ConfigurationValidationErrors.CleanupBatchSizePositive);
+        }
+
+        var recoveryWindowDays = options.MongoHistoryRetentionDays - options.MinimumHistoryHeadroomDays;
+        if (reconciliationOptions.Value.Enabled &&
+            reconciliationOptions.Value.RollingDays > recoveryWindowDays)
+        {
+            failures.Add(ConfigurationValidationErrors.RollingDaysExceedsRetentionWindow);
         }
 
         return failures.Count == 0

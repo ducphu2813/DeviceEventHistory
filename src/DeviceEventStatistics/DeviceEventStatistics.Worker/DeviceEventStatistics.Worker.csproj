@@ -25,4 +25,16 @@
         <Content Update="appsettings.Development.json" CopyToPublishDirectory="Never" />
         <Content Update="appsettings.Example.json" CopyToPublishDirectory="Never" />
     </ItemGroup>
+
+    <ItemGroup>
+        <Content Include="..\..\..\deploy\device-event-statistics\Apply-SqlMigrations.ps1"
+                 Link="deployment\Apply-SqlMigrations.ps1"
+                 CopyToPublishDirectory="PreserveNewest" />
+        <Content Include="..\DeviceEventStatistics.Infrastructure\SqlServer\Migrations\009_CreateDeviceEventStatisticsSchema.sql"
+                 Link="deployment\Migrations\009_CreateDeviceEventStatisticsSchema.sql"
+                 CopyToPublishDirectory="PreserveNewest" />
+        <Content Include="..\DeviceEventStatistics.Infrastructure\SqlServer\Migrations\011_AddRetentionCleanupIndexes.sql"
+                 Link="deployment\Migrations\011_AddRetentionCleanupIndexes.sql"
+                 CopyToPublishDirectory="PreserveNewest" />
+    </ItemGroup>
 </Project>

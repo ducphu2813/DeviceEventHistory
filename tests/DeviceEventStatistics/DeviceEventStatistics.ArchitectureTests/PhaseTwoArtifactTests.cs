@@ -20,10 +20,11 @@ public sealed class PhaseTwoArtifactTests
             .OrderBy(name => name, StringComparer.Ordinal)
             .ToArray();
 
-        Assert.Equal(10, migrations.Length);
+        Assert.Equal(11, migrations.Length);
         Assert.Equal("001_CreateStatisticsSchema", migrations[0]);
-        Assert.Equal("010_CleanupDeviceEventStatisticsSchema", migrations[^1]);
+        Assert.Equal("011_AddRetentionCleanupIndexes", migrations[^1]);
         Assert.Contains("009_CreateDeviceEventStatisticsSchema", migrations);
+        Assert.Contains("011_AddRetentionCleanupIndexes", migrations);
         Assert.DoesNotContain("011_AddScopedProcessedEventContract", migrations);
         Assert.DoesNotContain("012_FixMetricRegistryV1", migrations);
         Assert.Contains(
@@ -48,7 +49,8 @@ public sealed class PhaseTwoArtifactTests
         {
             var sql = File.ReadAllText(file);
             if (!Path.GetFileName(file).StartsWith("009_", StringComparison.Ordinal) &&
-                !Path.GetFileName(file).StartsWith("010_", StringComparison.Ordinal))
+                !Path.GetFileName(file).StartsWith("010_", StringComparison.Ordinal) &&
+                !Path.GetFileName(file).StartsWith("011_", StringComparison.Ordinal))
             {
                 Assert.Contains("__SCHEMA__", sql);
             }

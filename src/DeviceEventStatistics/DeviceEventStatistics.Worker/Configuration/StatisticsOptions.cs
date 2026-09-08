@@ -127,7 +127,21 @@ public sealed class RetentionOptions
 
     public TimeSpan RecoveryLookback { get; set; } = TimeSpan.FromHours(1);
 
+    // This is intentionally longer than Mongo history retention. It is the
+    // idempotency ledger that prevents a replay from incrementing facts twice.
+    public int ProcessedEventRetentionDays { get; set; } = 14;
+
+    public int StagingRetentionDays { get; set; } = 7;
+
+    public int ResolvedFailureRetentionDays { get; set; } = 90;
+
+    public int CompletedReconciliationRetentionDays { get; set; } = 90;
+
     public int ProjectionRunRetentionDays { get; set; } = 90;
+
+    public TimeSpan CleanupInterval { get; set; } = TimeSpan.FromHours(1);
+
+    public int CleanupBatchSize { get; set; } = 10_000;
 }
 
 public sealed class ObservabilityOptions
