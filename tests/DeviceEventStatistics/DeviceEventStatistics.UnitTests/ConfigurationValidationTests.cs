@@ -54,10 +54,50 @@ public sealed class ConfigurationValidationTests
             MinimumHistoryHeadroomDays = 2
         };
 
-        var result = new RetentionOptionsValidator(worker).Validate(Options.DefaultName, options);
+        var result = new RetentionOptionsValidator(
+            worker,
+            Options.Create(new ReconciliationOptions())).Validate(Options.DefaultName, options);
 
         Assert.False(result.Succeeded);
         Assert.Contains("STAT-CONFIG-RETENTION-HEADROOM-INVALID", result.FailureMessage);
+    }
+
+    [Fact]
+    public void Processed_event_retention_must_exceed_mongo_history_retention()
+    {
+        var worker = Options.Create(new WorkerOptions { Enabled = true });
+        var options = new RetentionOptions
+        {
+            MongoHistoryRetentionDays = 3,
+            MinimumHistoryHeadroomDays = 1,
+            ProcessedEventRetentionDays = 3
+        };
+
+        var result = new RetentionOptionsValidator(
+            worker,
+            Options.Create(new ReconciliationOptions { RollingDays = 2 })).Validate(Options.DefaultName, options);
+
+        Assert.False(result.Succeeded);
+        Assert.Contains("STAT-CONFIG-PROCESSED-EVENT-RETENTION-TOO-SHORT", result.FailureMessage);
+    }
+
+    [Fact]
+    public void Rolling_reconciliation_must_fit_inside_the_retained_history_window()
+    {
+        var worker = Options.Create(new WorkerOptions { Enabled = true });
+        var options = new RetentionOptions
+        {
+            MongoHistoryRetentionDays = 3,
+            MinimumHistoryHeadroomDays = 1,
+            ProcessedEventRetentionDays = 7
+        };
+
+        var result = new RetentionOptionsValidator(
+            worker,
+            Options.Create(new ReconciliationOptions { RollingDays = 3 })).Validate(Options.DefaultName, options);
+
+        Assert.False(result.Succeeded);
+        Assert.Contains("STAT-CONFIG-ROLLING-DAYS-EXCEEDS-RETENTION-WINDOW", result.FailureMessage);
     }
 
     [Fact]

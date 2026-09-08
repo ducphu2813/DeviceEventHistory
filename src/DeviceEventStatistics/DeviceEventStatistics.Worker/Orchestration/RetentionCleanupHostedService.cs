@@ -28,7 +28,7 @@ public sealed class RetentionCleanupHostedService(
             return;
         }
 
-        using var timer = new PeriodicTimer(TimeSpan.FromHours(24), timeProvider);
+        using var timer = new PeriodicTimer(retentionOptions.Value.CleanupInterval, timeProvider);
         do
         {
             await RunOnceAsync(stoppingToken);
@@ -64,20 +64,29 @@ public sealed class RetentionCleanupHostedService(
             var now = timeProvider.GetUtcNow();
             var result = await cleanupStore.CleanupAsync(
                 lease.Identity,
-                lease,
-                now - TimeSpan.FromDays(retentionOptions.Value.ProjectionRunRetentionDays),
-                now - TimeSpan.FromDays(retentionOptions.Value.ProjectionRunRetentionDays),
+                new OperationalCleanupOptions(
+                    now - TimeSpan.FromDays(retentionOptions.Value.ProcessedEventRetentionDays),
+                    now - TimeSpan.FromDays(retentionOptions.Value.StagingRetentionDays),
+                    now - TimeSpan.FromDays(retentionOptions.Value.ProjectionRunRetentionDays),
+                    now - TimeSpan.FromDays(retentionOptions.Value.ResolvedFailureRetentionDays),
+                    now - TimeSpan.FromDays(retentionOptions.Value.CompletedReconciliationRetentionDays),
+                    retentionOptions.Value.CleanupBatchSize),
                 cancellationToken);
-            if (result.DeletedStagingRows > 0 || result.DeletedProjectionRuns > 0)
+            if (result.DeletedProcessedEvents > 0 ||
+                result.DeletedStagingRows > 0 ||
+                result.DeletedProjectionRuns > 0 ||
+                result.DeletedResolvedFailures > 0 ||
+                result.DeletedCompletedReconciliationRequests > 0)
             {
                 logger.LogInformation(
                     StatisticsContractConstants.Messages.MSG_LOG_RETENTION_CLEANUP,
+                    result.DeletedProcessedEvents,
                     result.DeletedStagingRows,
-                    result.DeletedProjectionRuns);
+                    result.DeletedProjectionRuns,
+                    result.DeletedResolvedFailures,
+                    result.DeletedCompletedReconciliationRequests);
             }
-            telemetry.RecordOperationalCleanup(
-                result.DeletedStagingRows,
-                result.DeletedProjectionRuns);
+            telemetry.RecordOperationalCleanup(result);
             }
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)

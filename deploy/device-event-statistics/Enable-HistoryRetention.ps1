@@ -8,7 +8,7 @@ param(
 
     [string] $CollectionName = "device_event_history",
 
-    [int] $RetentionSeconds = 604800,
+    [int] $RetentionSeconds = 259200,
 
     [switch] $Preview
 )
@@ -66,10 +66,16 @@ if (missingPersistedAtUtc > 0) {
   print('Documents without a valid persistedAtUtc remain outside TTL processing and require separate audited migration.');
 }
 if (!preview) {
-  const ttlName = 'ttl_statistics_persisted_at_7d';
-  const existing = indexes.find(index => index.name === ttlName);
+  const ttlName = 'ttl_history_persisted_at';
+  const existing = indexes.find(index =>
+    index.key && Object.keys(index.key).length === 1 &&
+    index.key.persistedAtUtc === 1 &&
+    Object.prototype.hasOwnProperty.call(index, 'expireAfterSeconds'));
   if (existing && (existing.key.persistedAtUtc !== 1 || existing.expireAfterSeconds !== retentionSeconds)) {
-    throw new Error('Existing history TTL index has an incompatible contract.');
+    db.runCommand({
+      collMod: collectionName,
+      index: { name: existing.name, expireAfterSeconds: retentionSeconds }
+    });
   }
   if (!existing) {
     collection.createIndex(

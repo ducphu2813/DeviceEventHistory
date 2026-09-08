@@ -38,7 +38,7 @@ public static class AppConst
         public const int MaxTurnDurationMilliseconds = 250;
         public const int SchedulerQueueMultiplier = 4;
         public const int RemoteRequestTimeoutSeconds = 30;
-        public const int DefaultRetentionDays = 90;
+        public const int DefaultRetentionDays = 3;
         public const int FailureRetentionDays = 30;
         public const int PersistenceRetryCount = 5;
         public const int PersistenceRetryDelayMilliseconds = 250;
@@ -217,11 +217,13 @@ public static class AppConst
         public const string HistorySourceOffsetV2IndexName = "ix_source_file_offset_v2";
         public const string HistoryStatisticsCursorIndexName = "ix_statistics_persisted_event_id";
         public const string HistoryStatisticsScopedCursorIndexName = "ix_statistics_scope_persisted_event_id";
+        public const string HistoryRetentionTtlIndexName = "ttl_history_persisted_at";
         public const string FailureSourceOffsetIndexName = "ix_source_file_offset";
         public const string FailureCodeReceivedAtIndexName = "ix_error_code_received_at_utc_desc";
         public const string FailureSourceErrorReceivedAtIndexName = "ix_source_error_received_at_utc_desc";
         public const string FailureSourceOffsetV2IndexName = "ix_source_file_offset_v2";
         public const string FailureResolvedAtIndexName = "ix_resolved_at_utc";
+        public const string FailureRetentionTtlIndexName = "ttl_failure_persisted_at";
         public const string CheckpointSourceIdentityIndexName = "ux_source_folder_file_path";
         public const string CheckpointUpdatedAtIndexName = "ix_updated_at_utc_desc";
         public const string SystemCollectionPrefix = "system.";

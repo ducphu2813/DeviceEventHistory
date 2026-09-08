@@ -30,7 +30,7 @@ public sealed class PhaseFourArtifactTests
             "Schema",
             "SqlSchemaVerifier.cs");
         var verifier = File.ReadAllText(verifierPath);
-        Assert.Contains("009_CreateDeviceEventStatisticsSchema", verifier, StringComparison.Ordinal);
+        Assert.Contains("011_AddRetentionCleanupIndexes", verifier, StringComparison.Ordinal);
         Assert.Contains("ProjectionProcessedEventTypeV2", verifier, StringComparison.Ordinal);
     }
 

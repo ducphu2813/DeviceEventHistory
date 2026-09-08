@@ -176,7 +176,7 @@ public static class StatisticsContractConstants
         public const string MSG_LOG_MANUAL_MODE_SKIPPED =
             "Statistics manual mode skipped because the projection definition is already ready. ProjectionVersion={ProjectionVersion}.";
         public const string MSG_LOG_RETENTION_CLEANUP =
-            "Statistics operational cleanup completed. DeletedStagingRows={DeletedStagingRows}, DeletedProjectionRuns={DeletedProjectionRuns}.";
+            "Statistics operational cleanup completed. DeletedProcessedEvents={DeletedProcessedEvents}, DeletedStagingRows={DeletedStagingRows}, DeletedProjectionRuns={DeletedProjectionRuns}, DeletedResolvedFailures={DeletedResolvedFailures}, DeletedCompletedReconciliationRequests={DeletedCompletedReconciliationRequests}.";
         public const string MSG_LOG_HEALTH_STATUS_CHANGED =
             "Statistics operational health changed. Status={Status}, Reason={Reason}, IncrementalLag={IncrementalLag}, PendingRequestAge={PendingRequestAge}, RetentionHeadroom={RetentionHeadroom}.";
         public const string MSG_LOG_HEALTH_EVALUATION_FAILED =

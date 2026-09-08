@@ -60,6 +60,13 @@ public static class ServiceCollectionExtensions
             .Bind(configuration.GetSection(IngestionOptions.SectionName))
             .ValidateOnStart();
         services.AddSingleton<IValidateOptions<IngestionOptions>, IngestionOptionsValidator>();
+        services.AddSingleton(serviceProvider =>
+        {
+            var options = serviceProvider.GetRequiredService<IOptions<IngestionOptions>>().Value;
+            return new MongoRetentionSettings(
+                options.DefaultRetentionDays,
+                options.FailureRetentionDays);
+        });
 
         services.AddOptions<ObservabilityOptions>()
             .Bind(configuration.GetSection(ObservabilityOptions.SectionName))

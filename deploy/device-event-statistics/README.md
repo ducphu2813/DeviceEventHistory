@@ -25,9 +25,10 @@ Statistics tables and table types under `dbo`; it does not drop a database,
 schema, History objects, HangFire objects or ERP tables. Then execute 009.
 
 The older `001–008` files remain as read-only legacy migration history. They
-are not part of the bootstrap path. `Apply-SqlMigrations.ps1` applies only 009;
+are not part of the bootstrap path. `Apply-SqlMigrations.ps1` applies the
+standalone 009 bootstrap and the non-destructive 011 retention-index upgrade.
 010 must be reviewed and executed manually because it is destructive. The
-runtime identity only verifies the schema and latest bootstrap, and never
+runtime identity only verifies the schema and latest migration, and never
 creates or alters SQL objects.
 
 ```powershell
@@ -48,11 +49,13 @@ missing persisted timestamp separately.
 .\Enable-HistoryRetention.ps1 `
   -ConnectionString $env:DEVICE_EVENT_STATISTICS_MONGO_CONNECTION_STRING `
   -DatabaseName device_event_history `
+  -RetentionSeconds 259200 `
   -Preview
 
 .\Enable-HistoryRetention.ps1 `
   -ConnectionString $env:DEVICE_EVENT_STATISTICS_MONGO_CONNECTION_STRING `
-  -DatabaseName device_event_history
+  -DatabaseName device_event_history `
+  -RetentionSeconds 259200
 ```
 
 MongoDB removes TTL-eligible documents asynchronously; the script does not

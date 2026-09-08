@@ -25,8 +25,11 @@ public sealed class StatisticsMetrics : IStatisticsTelemetry, IDisposable
     private readonly Counter<long> reconciliationCompleted;
     private readonly Counter<long> reconciliationRetried;
     private readonly Counter<long> reconciliationFailed;
+    private readonly Counter<long> processedEventsDeleted;
     private readonly Counter<long> stagingRowsDeleted;
     private readonly Counter<long> projectionRunsDeleted;
+    private readonly Counter<long> resolvedFailuresDeleted;
+    private readonly Counter<long> completedReconciliationRequestsDeleted;
     private readonly Histogram<double> batchDuration;
     private readonly Histogram<double> reconciliationDuration;
     private readonly Histogram<long> pendingRequestCount;
@@ -50,8 +53,11 @@ public sealed class StatisticsMetrics : IStatisticsTelemetry, IDisposable
         reconciliationCompleted = meter.CreateCounter<long>("statistics.reconciliation.completed");
         reconciliationRetried = meter.CreateCounter<long>("statistics.reconciliation.retried");
         reconciliationFailed = meter.CreateCounter<long>("statistics.reconciliation.failed");
+        processedEventsDeleted = meter.CreateCounter<long>("statistics.cleanup.processed_events_deleted");
         stagingRowsDeleted = meter.CreateCounter<long>("statistics.cleanup.staging_rows_deleted");
         projectionRunsDeleted = meter.CreateCounter<long>("statistics.cleanup.projection_runs_deleted");
+        resolvedFailuresDeleted = meter.CreateCounter<long>("statistics.cleanup.resolved_failures_deleted");
+        completedReconciliationRequestsDeleted = meter.CreateCounter<long>("statistics.cleanup.completed_reconciliation_requests_deleted");
         batchDuration = meter.CreateHistogram<double>("statistics.batch.duration", "ms");
         reconciliationDuration = meter.CreateHistogram<double>("statistics.reconciliation.duration", "ms");
         pendingRequestCount = meter.CreateHistogram<long>("statistics.reconciliation.pending_requests", "requests");
@@ -93,10 +99,13 @@ public sealed class StatisticsMetrics : IStatisticsTelemetry, IDisposable
         reconciliationDuration.Record(duration.TotalMilliseconds);
     }
 
-    public void RecordOperationalCleanup(int deletedStagingRows, int deletedProjectionRuns)
+    public void RecordOperationalCleanup(OperationalCleanupResult result)
     {
-        stagingRowsDeleted.Add(deletedStagingRows);
-        projectionRunsDeleted.Add(deletedProjectionRuns);
+        processedEventsDeleted.Add(result.DeletedProcessedEvents);
+        stagingRowsDeleted.Add(result.DeletedStagingRows);
+        projectionRunsDeleted.Add(result.DeletedProjectionRuns);
+        resolvedFailuresDeleted.Add(result.DeletedResolvedFailures);
+        completedReconciliationRequestsDeleted.Add(result.DeletedCompletedReconciliationRequests);
     }
 
     public void RecordHealthSnapshot(

@@ -91,7 +91,7 @@ public sealed class RawLogWorkerIntegrationTests
         using var cancellationSource = new CancellationTokenSource(TimeSpan.FromSeconds(10));
         try
         {
-            await new MongoIndexInitializer(context, retryPolicy)
+            await new MongoIndexInitializer(context, retryPolicy, new MongoRetentionSettings(3, 30))
                 .InitializeAsync(cancellationSource.Token);
 
             var discovery = new RawLogFileDiscovery(

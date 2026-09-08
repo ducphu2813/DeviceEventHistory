@@ -1,4 +1,5 @@
 using DeviceEventHistory.Domain.Common;
+using DeviceEventHistory.Infrastructure.MongoDb.Configuration;
 using DeviceEventHistory.Infrastructure.MongoDb.Execution;
 using DeviceEventHistory.Infrastructure.MongoDb.Schema;
 using MongoDB.Bson;
@@ -8,7 +9,8 @@ namespace DeviceEventHistory.Infrastructure.MongoDb.Indexes;
 
 public sealed class MongoIndexInitializer(
     MongoDbContext context,
-    MongoRetryPolicy retryPolicy)
+    MongoRetryPolicy retryPolicy,
+    MongoRetentionSettings retentionSettings)
 {
     public async Task InitializeAsync(CancellationToken cancellationToken)
     {
@@ -115,6 +117,12 @@ public sealed class MongoIndexInitializer(
             AppConst.MongoDb.HistorySourceOffsetV2IndexName));
 
         await CreateMissingIndexesAsync(collection, existingIndexes, models, cancellationToken);
+        await EnsureTtlIndexAsync(
+            collection,
+            existingIndexes,
+            AppConst.MongoDb.HistoryRetentionTtlIndexName,
+            retentionSettings.HistoryRetentionDays,
+            cancellationToken);
     }
 
     private async Task CreateFailureIndexesAsync(CancellationToken cancellationToken)
@@ -146,6 +154,12 @@ public sealed class MongoIndexInitializer(
             AppConst.MongoDb.FailureSourceOffsetV2IndexName));
 
         await CreateMissingIndexesAsync(collection, existingIndexes, models, cancellationToken);
+        await EnsureTtlIndexAsync(
+            collection,
+            existingIndexes,
+            AppConst.MongoDb.FailureRetentionTtlIndexName,
+            retentionSettings.FailureRetentionDays,
+            cancellationToken);
     }
 
     private async Task CreateCheckpointIndexesAsync(CancellationToken cancellationToken)
@@ -188,6 +202,71 @@ public sealed class MongoIndexInitializer(
         new(
             new BsonDocumentIndexKeysDefinition<BsonDocument>(new BsonDocument(field, -1)),
             new CreateIndexOptions { Name = name });
+
+    private async Task EnsureTtlIndexAsync(
+        IMongoCollection<BsonDocument> collection,
+        IReadOnlyList<BsonDocument> existingIndexes,
+        string canonicalIndexName,
+        int retentionDays,
+        CancellationToken cancellationToken)
+    {
+        var retentionSeconds = checked(retentionDays * 24 * 60 * 60);
+        var ttlIndex = existingIndexes.FirstOrDefault(IsPersistedAtTtlIndex);
+        if (ttlIndex is null)
+        {
+            await retryPolicy.ExecuteAsync(
+                token => collection.Indexes.CreateOneAsync(
+                    new CreateIndexModel<BsonDocument>(
+                        new BsonDocumentIndexKeysDefinition<BsonDocument>(
+                            new BsonDocument("persistedAtUtc", 1)),
+                        new CreateIndexOptions
+                        {
+                            Name = canonicalIndexName,
+                            ExpireAfter = TimeSpan.FromSeconds(retentionSeconds)
+                        }),
+                    cancellationToken: token),
+                cancellationToken);
+            return;
+        }
+
+        var indexName = ttlIndex["name"].AsString;
+        var currentSeconds = ttlIndex["expireAfterSeconds"].ToInt64();
+        if (currentSeconds == retentionSeconds)
+        {
+            return;
+        }
+
+        await retryPolicy.ExecuteAsync(
+            token => context.Database.RunCommandAsync<BsonDocument>(
+                new BsonDocument
+                {
+                    { "collMod", collection.CollectionNamespace.CollectionName },
+                    {
+                        "index",
+                        new BsonDocument
+                        {
+                            { "name", indexName },
+                            { "expireAfterSeconds", retentionSeconds }
+                        }
+                    }
+                },
+                cancellationToken: token),
+            cancellationToken);
+    }
+
+    private static bool IsPersistedAtTtlIndex(BsonDocument index)
+    {
+        if (!index.TryGetValue("expireAfterSeconds", out _) ||
+            !index.TryGetValue("key", out var keyValue) ||
+            keyValue is not BsonDocument key ||
+            key.ElementCount != 1 ||
+            !key.TryGetValue("persistedAtUtc", out var direction))
+        {
+            return false;
+        }
+
+        return direction.ToInt32() == 1;
+    }
 
     private static CreateIndexModel<BsonDocument> CompoundDescendingIndex(
         string name,
